@@ -103,10 +103,21 @@
     <url>http://https://travis-ci.org/mojohaus/license-maven-plugin</url>
   </ciManagement>
   <distributionManagement>
-    <site>
-      <id>github</id>
-      <url>scm:git:git@github.com:mojohaus/license-maven-plugin.git</url>
-    </site>
+    <downloadUrl>http://cart/maven_repositories/</downloadUrl>
+    <repository>
+      <uniqueVersion>false</uniqueVersion>
+      <id>Smartlogic Inhouse Repository</id>
+      <name>Smartlogic Inhouse Repository</name>
+      <url>dav:http://cart/archiva/repository/inhouse</url>
+      <layout>default</layout>
+    </repository>
+    <snapshotRepository>
+      <uniqueVersion>false</uniqueVersion>
+      <id>Smartlogic Inhouse Snapshot Repository</id>
+      <name>Smartlogic Inhouse Snapshot Repository</name>
+      <url>dav:http://cart/archiva/repository/inhouse_snapshot</url>
+      <layout>default</layout>
+    </snapshotRepository>
   </distributionManagement>
 
   <properties>
