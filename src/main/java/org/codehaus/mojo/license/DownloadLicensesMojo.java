@@ -83,7 +83,7 @@ public class DownloadLicensesMojo
      * @since 1.0
      */
     @Parameter( defaultValue = "${localRepository}", readonly = true )
-    private ArtifactRepository localRepository;
+    protected ArtifactRepository localRepository;
 
     /**
      * List of Remote Repositories used by the resolver
@@ -91,7 +91,7 @@ public class DownloadLicensesMojo
      * @since 1.0
      */
     @Parameter( defaultValue = "${project.remoteArtifactRepositories}", readonly = true )
-    private List remoteRepositories;
+    protected List remoteRepositories;
 
     /**
      * Input file containing a mapping between each dependency and it's license information.
@@ -185,7 +185,7 @@ public class DownloadLicensesMojo
      * @since 1.0
      */
     @Component
-    private MavenProject project;
+    protected MavenProject project;
 
     /**
      * Dependencies tool.
@@ -480,7 +480,7 @@ public class DownloadLicensesMojo
      * @param depMavenProject the dependency maven project
      * @return DependencyProject with artifact and license info
      */
-    private ProjectLicenseInfo createDependencyProject( MavenProject depMavenProject )
+    protected ProjectLicenseInfo createDependencyProject( MavenProject depMavenProject )
     {
         ProjectLicenseInfo dependencyProject =
             new ProjectLicenseInfo( depMavenProject.getGroupId(), depMavenProject.getArtifactId(),
