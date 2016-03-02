@@ -103,7 +103,10 @@
     <url>http://https://travis-ci.org/mojohaus/license-maven-plugin</url>
   </ciManagement>
   <distributionManagement>
-    <downloadUrl>http://cart/maven_repositories/</downloadUrl>
+    <site>
+      <id>github</id>
+      <url>scm:git:git@github.com:mojohaus/license-maven-plugin.git</url>
+    </site>
     <repository>
       <uniqueVersion>false</uniqueVersion>
       <id>Smartlogic Inhouse Repository</id>
