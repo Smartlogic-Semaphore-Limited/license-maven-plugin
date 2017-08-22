@@ -94,6 +94,14 @@ public class DownloadLicensesMojo
     protected List remoteRepositories;
 
     /**
+     * Only consider local repository to resolve artifacts. Speeds up the process.
+     *
+     * @since 1.9
+     */
+    @Parameter( defaultValue = "false" )
+    private boolean skipRemoteRepositories;
+
+    /**
      * Input file containing a mapping between each dependency and it's license information.
      *
      * @since 1.0
@@ -253,8 +261,10 @@ public class DownloadLicensesMojo
             loadLicenseInfo( configuredDepLicensesMap, licensesConfigFile, false );
         }
 
+        List<ArtifactRepository> enabledRemoteRepositories =
+            skipRemoteRepositories ? new ArrayList() : remoteRepositories;
         SortedMap<String, MavenProject> dependencies =
-            dependenciesTool.loadProjectDependencies( project, this, localRepository, remoteRepositories, null );
+            dependenciesTool.loadProjectDependencies( project, this, localRepository, enabledRemoteRepositories, null );
 
         // The resulting list of licenses after dependency resolution
         List<ProjectLicenseInfo> depProjectLicenses = new ArrayList<ProjectLicenseInfo>();
