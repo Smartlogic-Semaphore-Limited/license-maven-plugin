@@ -33,7 +33,7 @@
   </parent>
 
   <artifactId>license-maven-plugin</artifactId>
-  <version>1.9-SNAPSHOT</version>
+  <version>1.9-SL02</version>
   <packaging>maven-plugin</packaging>
 
   <name>License Maven Plugin</name>
