@@ -23,6 +23,7 @@ package org.codehaus.mojo.license.utils;
  */
 
 import org.apache.maven.model.License;
+import org.codehaus.mojo.license.model.LicenseExt;
 import org.codehaus.mojo.license.model.ProjectLicenseInfo;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -120,7 +121,7 @@ public class LicenseSummaryWriter
             licenseNode.appendChild( licNameNode );
         }
 
-        if ( lic.getUrl() != null )
+	if ( lic.getUrl() != null && shouldWriteUrl( lic ) )
         {
             Node licUrlNode = doc.createElement( "url" );
             licUrlNode.appendChild( doc.createTextNode( lic.getUrl() ) );
@@ -141,7 +142,32 @@ public class LicenseSummaryWriter
             licenseNode.appendChild( licCommentsNode );
         }
 
+        if (lic instanceof LicenseExt) {
+            LicenseExt licExt = (LicenseExt) lic;
+	    addOptionalLicenseTextNode( doc, licenseNode, licExt.getFilename(), "filename" );
+        }
+
         return licenseNode;
+    }
+
+    private static boolean shouldWriteUrl( License lic )
+    {
+	if ( lic instanceof LicenseExt )
+	{
+	    LicenseExt licExt = (LicenseExt) lic;
+	    return !licExt.isLocalJarUrl();
+	}
+	return true;
+    }
+
+    private static void addOptionalLicenseTextNode( Document doc, Node licenseNode, String value, String field )
+    {
+	if ( value != null )
+	{
+	    Node node = doc.createElement( field );
+	    node.appendChild( doc.createTextNode( value ) );
+	    licenseNode.appendChild( node );
+	}
     }
 
 }

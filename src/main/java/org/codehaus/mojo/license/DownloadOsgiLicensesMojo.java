@@ -32,6 +32,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.mojo.license.model.LicenseExt;
 import org.codehaus.mojo.license.model.ProjectLicenseInfo;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
@@ -231,19 +232,25 @@ public class DownloadOsgiLicensesMojo
             getLog().debug( "Found about file: " + entry );
             URL uri = artifact.getFile().toURI().toURL();
             String licenseUrl = new URL( "jar", "", uri.toString() + "!/" + entry.getName() ).toString();
-            addLicense( licenses, artifact, licenseUrl );
+	    addLicense( licenses, artifact, licenseUrl, true );
         }
     }
 
     private void addLicense( List<License> licenses, Artifact artifact, String licenseUrl )
     {
-        licenses.add( createLicense( artifact.getArtifactId(), licenseUrl ) );
+	licenses.add( createLicense( artifact.getArtifactId(), licenseUrl, false ) );
     }
 
-    private License createLicense( String licenseName, String licenseUrl )
+    private void addLicense( List<License> licenses, Artifact artifact, String licenseUrl, boolean isLocalJarUrl )
     {
-        License license = new License();
+	licenses.add( createLicense( artifact.getArtifactId(), licenseUrl, isLocalJarUrl ) );
+    }
+
+    private License createLicense( String licenseName, String licenseUrl, boolean isLocalJarUrl )
+    {
+	LicenseExt license = new LicenseExt();
         license.setName( licenseName );
+	license.setLocalJarUrl( isLocalJarUrl );
         license.setUrl( licenseUrl );
         return license;
     }

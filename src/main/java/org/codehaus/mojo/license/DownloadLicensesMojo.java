@@ -36,6 +36,7 @@ import org.apache.maven.project.MavenProject;
 import org.apache.maven.settings.Proxy;
 import org.codehaus.mojo.license.api.DependenciesTool;
 import org.codehaus.mojo.license.api.MavenProjectDependenciesConfigurator;
+import org.codehaus.mojo.license.model.LicenseExt;
 import org.codehaus.mojo.license.model.ProjectLicenseInfo;
 import org.codehaus.mojo.license.utils.FileUtil;
 import org.codehaus.mojo.license.utils.LicenseDownloader;
@@ -564,6 +565,10 @@ public class DownloadLicensesMojo
             try
             {
                 String licenseFileName = getLicenseFileName( license );
+		if ( license instanceof LicenseExt )
+		{
+		    ( (LicenseExt) license ).setFilename( licenseFileName );
+		}
 
                 File licenseOutputFile = new File( licensesOutputDirectory, licenseFileName );
                 if ( licenseOutputFile.exists() )
