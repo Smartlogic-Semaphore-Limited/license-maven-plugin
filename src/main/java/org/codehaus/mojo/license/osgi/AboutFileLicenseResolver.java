@@ -19,10 +19,13 @@ import org.codehaus.mojo.license.ext.LicenseFactory;
 public class AboutFileLicenseResolver
 {
 
-    private static final String FILENAME_PATTERN_STR = "Third Party Content.*<a\\s+href=\"about_files/(\\S+)\"(.*?)>";
+    private static final String SECTION_PREFIX = "Third Party Content";
+    private static final String FILENAME_PATTERN_STR = SECTION_PREFIX + ".*<a\\s+href=\"about_files/(\\S+)\"(.*?)>";
     private static final Pattern FILENAME_PATTERN = Pattern.compile( FILENAME_PATTERN_STR, Pattern.DOTALL );
 
-    private static final String URL_PATTERN_STR = "Third Party Content.*also.available.at.<a\\s+href=\"(\\S+)\"(.*?)>";
+    private static final String URL_PREFIXES = "(also.available.at.|, available at )";
+
+    private static final String URL_PATTERN_STR = SECTION_PREFIX + ".*" + URL_PREFIXES + "<a\\s+href=\"(\\S+)\"(.*?)>";
     private static final Pattern URL_PATTERN = Pattern.compile( URL_PATTERN_STR, Pattern.DOTALL );
 
     public License resolve( String artifactId, File file )
@@ -56,11 +59,15 @@ public class AboutFileLicenseResolver
 	String licenseFilename = findLicenseFilename( content );
 	if ( licenseFilename != null )
 	{
-	    URL url = toJarUrl( file, "about_files/" + licenseFilename );
-	    return LicenseFactory.create( artifactId, url.toString(), true );
+	    return createJarEmbeddedLicense( artifactId, file, "about_files/" + licenseFilename );
 	}
+	return createJarEmbeddedLicense( artifactId, file, entry.getName() );
+    }
 
-	URL url = toJarUrl( file, entry.getName() );
+    private License createJarEmbeddedLicense( String artifactId, File file, String localPath )
+	throws MalformedURLException
+    {
+	URL url = toJarUrl( file, localPath );
 	return LicenseFactory.create( artifactId, url.toString(), true );
     }
 
@@ -78,7 +85,7 @@ public class AboutFileLicenseResolver
 
     private String findLicenseUrl( String content )
     {
-	return findGroup( content, URL_PATTERN, 1 );
+	return findGroup( content, URL_PATTERN, 2 );
     }
 
     private String findGroup( String content, Pattern pattern, int groupNumber )
