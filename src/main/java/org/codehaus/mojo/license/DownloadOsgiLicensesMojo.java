@@ -1,12 +1,11 @@
 package org.codehaus.mojo.license;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -14,7 +13,6 @@ import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import java.util.zip.ZipEntry;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.ArtifactUtils;
@@ -32,7 +30,9 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.mojo.license.ext.LicenseFactory;
 import org.codehaus.mojo.license.model.ProjectLicenseInfo;
+import org.codehaus.mojo.license.osgi.AboutFileLicenseResolver;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 /**
@@ -43,7 +43,8 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 @Mojo( name = "download-osgi-licenses", requiresDependencyResolution = ResolutionScope.TEST,
        defaultPhase = LifecyclePhase.PACKAGE )
 public class DownloadOsgiLicensesMojo
-    extends DownloadLicensesMojo
+    extends
+    DownloadLicensesMojo
 {
 
     private static final String BUNDLE_LICENSE = "Bundle-License";
@@ -65,6 +66,9 @@ public class DownloadOsgiLicensesMojo
 
     @Component
     private ArtifactFactory artifactFactory;
+
+    @Component
+    private AboutFileLicenseResolver aboutFileLicenseResolver;
 
     @Override
     public String getExcludedArtifacts()
@@ -124,7 +128,7 @@ public class DownloadOsgiLicensesMojo
                 }
                 if ( licenses.isEmpty() )
                 {
-                    readLicensesFromAboutFile( licenses, artifact, jarFile );
+                    readLicensesFromAboutFile( licenses, artifact, artifactFile );
                 }
             }
             finally
@@ -174,7 +178,7 @@ public class DownloadOsgiLicensesMojo
         } ).forEach( new Consumer<JarEntry>() {
             public void accept( JarEntry pomEntry )
             {
-                readLicensesFromPom(licenses, jarFile, pomEntry);
+                readLicensesFromPom( licenses, jarFile, pomEntry );
             }
         } );
     }
@@ -194,10 +198,7 @@ public class DownloadOsgiLicensesMojo
                 {
                     break;
                 }
-                Artifact parentArtifact =
-                    artifactFactory.createProjectArtifact( p.getGroupId(), p.getArtifactId(), p.getVersion() );
-                artifactResovler.resolve( parentArtifact, remoteRepositories, localRepository );
-                model = reader.read( new FileReader( parentArtifact.getFile() ) );
+                model = readModelFromArtifact( p.getGroupId(), p.getArtifactId(), p.getVersion() );
             }
             for ( Object license : model.getLicenses() )
             {
@@ -222,30 +223,27 @@ public class DownloadOsgiLicensesMojo
         }
     }
 
-    void readLicensesFromAboutFile( List<License> licenses, Artifact artifact, JarFile jarFile )
-        throws MalformedURLException
+    Model readModelFromArtifact( String groupId, String artifactId, String version )
+        throws ArtifactResolutionException, ArtifactNotFoundException, FileNotFoundException, IOException,
+        XmlPullParserException
     {
-        ZipEntry entry = jarFile.getEntry( "about.html" );
-        if ( entry != null )
+        Artifact parentArtifact = artifactFactory.createProjectArtifact( groupId, artifactId, version );
+        artifactResovler.resolve( parentArtifact, remoteRepositories, localRepository );
+        return new MavenXpp3Reader().read( new FileReader( parentArtifact.getFile() ) );
+    }
+
+    void readLicensesFromAboutFile( List<License> licenses, Artifact artifact, File jarFile )
+        throws IOException
+    {
+        for ( License license : aboutFileLicenseResolver.resolve( artifact.getArtifactId(), jarFile ) )
         {
-            getLog().debug( "Found about file: " + entry );
-            URL uri = artifact.getFile().toURI().toURL();
-            String licenseUrl = new URL( "jar", "", uri.toString() + "!/" + entry.getName() ).toString();
-            addLicense( licenses, artifact, licenseUrl );
+            licenses.add( license );
         }
     }
 
     private void addLicense( List<License> licenses, Artifact artifact, String licenseUrl )
     {
-        licenses.add( createLicense( artifact.getArtifactId(), licenseUrl ) );
-    }
-
-    private License createLicense( String licenseName, String licenseUrl )
-    {
-        License license = new License();
-        license.setName( licenseName );
-        license.setUrl( licenseUrl );
-        return license;
+        licenses.add( LicenseFactory.create( artifact.getArtifactId(), licenseUrl ) );
     }
 
 }

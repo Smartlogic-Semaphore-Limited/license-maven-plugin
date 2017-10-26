@@ -37,6 +37,7 @@ import org.apache.maven.settings.Proxy;
 import org.codehaus.mojo.license.api.DependenciesTool;
 import org.codehaus.mojo.license.api.MavenProjectDependenciesConfigurator;
 import org.codehaus.mojo.license.model.ProjectLicenseInfo;
+import org.codehaus.mojo.license.osgi.JarEmbeddedFiles;
 import org.codehaus.mojo.license.utils.FileUtil;
 import org.codehaus.mojo.license.utils.LicenseDownloader;
 import org.codehaus.mojo.license.utils.LicenseSummaryReader;
@@ -202,6 +203,9 @@ public class DownloadLicensesMojo
      */
     @Component
     private DependenciesTool dependenciesTool;
+
+    @Component
+    private JarEmbeddedFiles embeddedJarFiles;
 
     // ----------------------------------------------------------------------
     // Private Fields
@@ -523,6 +527,11 @@ public class DownloadLicensesMojo
             licenseFileName = license.getName() + " - " + licenseUrlFile.getName();
         }
 
+        if ( embeddedJarFiles.isLocalJarPath( license.getUrl() ) )
+        {
+            licenseFileName = license.getName() + "/" + embeddedJarFiles.getLocalFilepath( license.getUrl() );
+        }
+
         // Check if the file has a valid file extention
         final String defaultExtension = ".txt";
         int extensionIndex = licenseFileName.lastIndexOf( "." );
@@ -570,7 +579,7 @@ public class DownloadLicensesMojo
                 {
                     continue;
                 }
-
+                ensureParentDirExists( licenseOutputFile );
                 if ( !downloadedLicenseURLs.contains( license.getUrl() ) )
                 {
                     LicenseDownloader.downloadLicense( license.getUrl(), proxyLoginPasswordEncoded, licenseOutputFile );
@@ -599,9 +608,21 @@ public class DownloadLicensesMojo
                 getLog().warn( license.getUrl() );
                 getLog().warn( e.getMessage() );
             }
-
+            finally
+            {
+                embeddedJarFiles.convertUrlToLocalFile( license );
+            }
         }
 
+    }
+
+    private void ensureParentDirExists( File file )
+    {
+        File parent = file.getParentFile();
+        if ( !parent.exists() )
+        {
+            parent.mkdirs();
+        }
     }
 
 }
