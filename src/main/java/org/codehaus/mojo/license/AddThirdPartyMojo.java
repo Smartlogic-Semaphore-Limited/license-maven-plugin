@@ -7,160 +7,74 @@ package org.codehaus.mojo.license;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
  */
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.SortedSet;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
-import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugin.logging.Log;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuildingException;
+import org.codehaus.mojo.license.api.ArtifactFilters;
+import org.codehaus.mojo.license.api.DependenciesToolException;
 import org.codehaus.mojo.license.api.MavenProjectDependenciesConfigurator;
+import org.codehaus.mojo.license.api.ResolvedProjectDependencies;
 import org.codehaus.mojo.license.api.ThirdPartyToolException;
 import org.codehaus.mojo.license.model.LicenseMap;
 import org.codehaus.mojo.license.utils.FileUtil;
-import org.codehaus.mojo.license.utils.MojoHelper;
 import org.codehaus.mojo.license.utils.SortedProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.SortedSet;
-
+// CHECKSTYLE_OFF: LineLength
 /**
  * Goal to generate the third-party license file.
- * <p/>
+ * <p>
  * This file contains a list of the dependencies and their licenses.  Each dependency and its
- * license is displayed on a single line in the format <br/>
+ * license is displayed on a single line in the format
  * <pre>
  *   (&lt;license-name&gt;) &lt;project-name&gt; &lt;groupId&gt;:&lt;artifactId&gt;:&lt;version&gt; - &lt;project-url&gt;
  * </pre>
  * The directory containing the license database file is added to the classpath as an additional resource.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
-@Mojo( name = "add-third-party", requiresProject = true, requiresDependencyResolution = ResolutionScope.TEST,
+// CHECKSTYLE_ON: LineLength
+@Mojo( name = "add-third-party", requiresDependencyResolution = ResolutionScope.TEST,
        defaultPhase = LifecyclePhase.GENERATE_RESOURCES )
-public class AddThirdPartyMojo
-    extends AbstractAddThirdPartyMojo
-    implements MavenProjectDependenciesConfigurator
+public class AddThirdPartyMojo extends AbstractAddThirdPartyMojo implements MavenProjectDependenciesConfigurator
 {
+    private static final Logger LOG = LoggerFactory.getLogger( AddThirdPartyMojo.class );
 
     // ----------------------------------------------------------------------
     // Mojo Parameters
     // ----------------------------------------------------------------------
-
-    /**
-     * Attach the 'missing' file as an additional artifact so that it is deployed in the deploy phase.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "license.deployMissingFile", defaultValue = "true" )
-    private boolean deployMissingFile;
-
-    /**
-     * Load files supplying information for missing third party licenses from repositories.
-     * The plugin looks for Maven artifacts with coordinates of the form G:A:V:properties:third-party, where
-     * the group, artifact, and version are those for dependencies of your project,
-     * while the type is 'properties' and the classifier is 'third-party'.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "license.useRepositoryMissingFiles", defaultValue = "true" )
-    private boolean useRepositoryMissingFiles;
-
-    /**
-     * To execute or not this mojo if project packaging is pom.
-     * <p/>
-     * <strong>Note:</strong> The default value is {@code false}.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.acceptPomPackaging", defaultValue = "false" )
-    private boolean acceptPomPackaging;
-
-    /**
-     * A filter to exclude some scopes.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.excludedScopes", defaultValue = "system" )
-    private String excludedScopes;
-
-    /**
-     * A filter to include only some scopes, if let empty then all scopes will be used (no filter).
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.includedScopes", defaultValue = "" )
-    private String includedScopes;
-
-    /**
-     * A filter to exclude some GroupIds
-     * This is a regular expression that is applied to groupIds (not an ant pattern).
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.excludedGroups", defaultValue = "" )
-    private String excludedGroups;
-
-    /**
-     * A filter to include only some GroupIds
-     * This is a regular expression applied to artifactIds.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.includedGroups", defaultValue = "" )
-    private String includedGroups;
-
-    /**
-     * A filter to exclude some ArtifactsIds
-     * This is a regular expression applied to artifactIds.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.excludedArtifacts", defaultValue = "" )
-    private String excludedArtifacts;
-
-    /**
-     * A filter to include only some ArtifactsIds
-     * This is a regular expression applied to artifactIds.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.includedArtifacts", defaultValue = "" )
-    private String includedArtifacts;
-
-    /**
-     * Include transitive dependencies when checking for missing licenses and downloading license files.
-     * If this is <tt>false</tt>, then only direct dependencies are examined.
-     *
-     * @since 1.1
-     */
-    @Parameter( property = "license.includeTransitiveDependencies", defaultValue = "true" )
-    private boolean includeTransitiveDependencies;
 
     /**
      * To skip execution of this mojo.
@@ -178,6 +92,34 @@ public class AddThirdPartyMojo
      * Internal flag to know if missing file must be generated.
      */
     private boolean doGenerateMissing;
+
+    /**
+     * Whether this is an aggregate build, or a single-project goal. This setting determines which dependency artifacts
+     * will be examined by the plugin. AddThirdParty needs to load dependencies only for the single project it is run
+     * for, while AggregateAddThirdParty needs to load dependencies for the parent project, as well as all child
+     * projects in the reactor.
+     */
+    private boolean isAggregatorBuild = false;
+
+    /**
+     * The reactor projects. When resolving dependencies, the aggregator goal needs to do custom handling
+     * of sibling dependencies for projects in the reactor,
+     * to avoid trying to load artifacts for projects that haven't been built/published yet.
+     */
+    private List<MavenProject> reactorProjectDependencies;
+
+    /**
+     * Copies of the project's dependency sets. AddThirdParty needs to load dependencies only for the single project it
+     * is run for, while AggregateAddThirdParty needs to load dependencies for the parent project, as well as all child
+     * projects in the reactor.
+     *
+     * In cases where one child project A in a reactor depends on another project B in the same reactor,
+     * B is not necessarily built/published. The plugin needs to resolve B's dependencies manually.
+     * This field stores the result of that manual resolution.
+     */
+    private ResolvedProjectDependencies dependencyArtifacts;
+
+    private ArtifactFilters artifactFilters;
 
     // ----------------------------------------------------------------------
     // AbstractLicenseMojo Implementaton
@@ -215,10 +157,10 @@ public class AddThirdPartyMojo
     @Override
     protected boolean checkSkip()
     {
-        if ( !isDoGenerate() && !isDoGenerateBundle() && !doGenerateMissing )
+        if ( !doGenerate && !doGenerateBundle && !doGenerateMissing )
         {
 
-            getLog().info( "All files are up to date, skip goal execution." );
+            LOG.info( "All files are up to date, skip goal execution." );
             return false;
         }
         return true;
@@ -229,17 +171,17 @@ public class AddThirdPartyMojo
      */
     @Override
     protected void doAction()
-        throws Exception
+            throws Exception
     {
 
-        boolean unsafe = checkUnsafeDependencies();
+        consolidate();
+
+        checkUnsafeDependencies();
 
         boolean safeLicense = checkForbiddenLicenses();
 
-        if ( !safeLicense && isFailIfWarning() )
-        {
-            throw new MojoFailureException( "There are some forbidden licenses used, please check your dependencies." );
-        }
+        checkBlacklist( safeLicense );
+
         writeThirdPartyFile();
 
         if ( doGenerateMissing )
@@ -248,31 +190,27 @@ public class AddThirdPartyMojo
             writeMissingFile();
         }
 
-        if ( unsafe && isFailIfWarning() )
-        {
-            throw new MojoFailureException(
-                "There are some dependencies with no license, please fill the file " + getMissingFile() );
-        }
+        boolean unsafe = CollectionUtils.isNotEmpty( unsafeDependencies );
 
-        if ( !unsafe && isUseMissingFile() && MapUtils.isEmpty( getUnsafeMappings() ) && getMissingFile().exists() )
+        checkMissing( unsafe );
+
+        if ( !unsafe && useMissingFile && MapUtils.isEmpty( unsafeMappings ) && missingFile.exists() )
         {
 
             // there is no missing dependencies, but still a missing file, delete it
-            getLog().info( "There is no dependency to put in missing file, delete it at " + getMissingFile() );
-            FileUtil.deleteFile( getMissingFile() );
+            LOG.info( "There is no dependency to put in missing file, delete it at {}", missingFile );
+            FileUtil.deleteFile( missingFile );
         }
 
-        if ( !unsafe && deployMissingFile && MapUtils.isNotEmpty( getUnsafeMappings() ) )
+        if ( !unsafe && deployMissingFile && MapUtils.isNotEmpty( unsafeMappings ) )
         {
 
             // can deploy missing file
-            File file = getMissingFile();
-
-            getLog().info( "Will attach third party file from " + file );
-            getHelper().attachThirdPartyDescriptor( file );
+            LOG.info( "Will attach third party file from {}", missingFile );
+            getHelper().attachThirdPartyDescriptor( missingFile );
         }
 
-        addResourceDir( getOutputDirectory(), "**/*.txt" );
+        addResourceDir( outputDirectory, "**/*.txt" );
     }
 
     // ----------------------------------------------------------------------
@@ -283,9 +221,34 @@ public class AddThirdPartyMojo
      * {@inheritDoc}
      */
     @Override
-    protected SortedMap<String, MavenProject> loadDependencies()
+    protected SortedMap<String, MavenProject> loadDependencies() throws DependenciesToolException
     {
-        return getHelper().loadDependencies( this );
+        return getHelper().loadDependencies( this, resolveDependencyArtifacts() );
+    }
+
+    /**
+     * Resolves the transitive and direct dependency sets for this project.
+     *
+     * @return The set of all dependencies, and the set of only direct dependency artifacts.
+     * @throws org.codehaus.mojo.license.api.DependenciesToolException if the dependencies could not be resolved
+     */
+    protected ResolvedProjectDependencies resolveDependencyArtifacts() throws DependenciesToolException
+    {
+        if ( dependencyArtifacts != null )
+        {
+            return dependencyArtifacts;
+        }
+        if ( isAggregatorBuild )
+        {
+            dependencyArtifacts =
+                    new ResolvedProjectDependencies( project.getArtifacts(), project.getDependencyArtifacts() );
+        }
+        else
+        {
+            dependencyArtifacts = new ResolvedProjectDependencies( project.getArtifacts(),
+                    project.getDependencyArtifacts() );
+        }
+        return dependencyArtifacts;
     }
 
     /**
@@ -293,17 +256,18 @@ public class AddThirdPartyMojo
      */
     @Override
     protected SortedProperties createUnsafeMapping()
-        throws ProjectBuildingException, IOException, ThirdPartyToolException
+      throws ProjectBuildingException, IOException, ThirdPartyToolException,
+            MojoExecutionException, DependenciesToolException
     {
 
-        SortedSet<MavenProject> unsafeDependencies = getUnsafeDependencies();
-
         SortedProperties unsafeMappings =
-            getHelper().createUnsafeMapping( getLicenseMap(), getMissingFile(), useRepositoryMissingFiles,
-                                             unsafeDependencies, getProjectDependencies() );
+                getHelper().createUnsafeMapping( licenseMap, missingFile, missingFileUrl,
+                                                 useRepositoryMissingFiles, unsafeDependencies,
+                                                 projectDependencies,
+                                                 resolveDependencyArtifacts().getAllDependencies() );
         if ( isVerbose() )
         {
-            getLog().info( "found " + unsafeMappings.size() + " unsafe mappings" );
+            LOG.info( "found {} unsafe mappings", unsafeMappings.size() );
         }
 
         // compute if missing file should be (re)-generate
@@ -312,22 +276,22 @@ public class AddThirdPartyMojo
         if ( doGenerateMissing && isVerbose() )
         {
             StringBuilder sb = new StringBuilder();
-            sb.append( "Will use from missing file " );
+            sb.append( "Will use " );
             sb.append( unsafeMappings.size() );
-            sb.append( " dependencies :" );
+            sb.append( " dependencies from missingFile:" );
             for ( Map.Entry<Object, Object> entry : unsafeMappings.entrySet() )
             {
                 String id = (String) entry.getKey();
                 String license = (String) entry.getValue();
                 sb.append( "\n - " ).append( id ).append( " - " ).append( license );
             }
-            getLog().info( sb.toString() );
+            LOG.info( "{}", sb );
         }
         else
         {
-            if ( isUseMissingFile() && !unsafeMappings.isEmpty() )
+            if ( useMissingFile && !unsafeMappings.isEmpty() )
             {
-                getLog().info( "Missing file " + getMissingFile() + " is up-to-date." );
+                LOG.info( "Missing file {} is up-to-date.", missingFile );
             }
         }
         return unsafeMappings;
@@ -340,57 +304,29 @@ public class AddThirdPartyMojo
     /**
      * {@inheritDoc}
      */
-    public String getExcludedGroups()
-    {
-        return excludedGroups;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getIncludedGroups()
-    {
-        return includedGroups;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public List<String> getExcludedScopes()
-    {
-        return MojoHelper.getParams( excludedScopes );
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public List<String> getIncludedScopes()
-    {
-        return MojoHelper.getParams( includedScopes );
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getExcludedArtifacts()
-    {
-        return excludedArtifacts;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getIncludedArtifacts()
-    {
-        return includedArtifacts;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
     public boolean isIncludeTransitiveDependencies()
     {
         return includeTransitiveDependencies;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public boolean isExcludeTransitiveDependencies()
+    {
+        return excludeTransitiveDependencies;
+    }
+
+    /** {@inheritDoc} */
+    public ArtifactFilters getArtifactFilters()
+    {
+        if ( artifactFilters == null )
+        {
+            artifactFilters = ArtifactFilters.of( includedGroups, excludedGroups, includedArtifacts, excludedArtifacts,
+                                                  includedScopes, excludedScopes, includedTypes, excludedTypes,
+                                                  includeOptional, artifactFiltersUrl , getEncoding() );
+        }
+        return artifactFilters;
     }
 
     // ----------------------------------------------------------------------
@@ -405,18 +341,17 @@ public class AddThirdPartyMojo
      * @since 1.0
      */
     private boolean computeDoGenerateMissingFile( SortedProperties unsafeMappings,
-                                                  SortedSet<MavenProject> unsafeDependencies )
-        throws IOException
+                                                  SortedSet<MavenProject> unsafeDependencies ) throws IOException
     {
 
-        if ( !isUseMissingFile() )
+        if ( !useMissingFile )
         {
 
             // never use the missing file
             return false;
         }
 
-        if ( isForce() )
+        if ( force )
         {
 
             // the mapping for missing file is not empty, regenerate it
@@ -430,8 +365,6 @@ public class AddThirdPartyMojo
             // regenerate missing file
             return true;
         }
-
-        File missingFile = getMissingFile();
 
         if ( !missingFile.exists() )
         {
@@ -453,21 +386,17 @@ public class AddThirdPartyMojo
      * @throws IOException if error while writing missing file
      */
     private void writeMissingFile()
-        throws IOException
+            throws IOException
     {
 
-        Log log = getLog();
-        LicenseMap licenseMap = getLicenseMap();
-        File file = getMissingFile();
+        FileUtil.createDirectoryIfNecessary( missingFile.getParentFile() );
+        LOG.info( "Regenerate missing license file {}", missingFile );
 
-        FileUtil.createDirectoryIfNecessary( file.getParentFile() );
-        log.info( "Regenerate missing license file " + file );
-
-        FileOutputStream writer = new FileOutputStream( file );
+        FileOutputStream writer = new FileOutputStream( missingFile );
         try
         {
             StringBuilder sb = new StringBuilder( " Generated by " + getClass().getName() );
-            List<String> licenses = new ArrayList<String>( licenseMap.keySet() );
+            List<String> licenses = new ArrayList<>( licenseMap.keySet() );
             licenses.remove( LicenseMap.UNKNOWN_LICENSE_MESSAGE );
             if ( !licenses.isEmpty() )
             {
@@ -480,11 +409,63 @@ public class AddThirdPartyMojo
             }
             sb.append( "\n-------------------------------------------------------------------------------" );
             sb.append( "\n Please fill the missing licenses for dependencies :\n\n" );
-            getUnsafeMappings().store( writer, sb.toString() );
+            unsafeMappings.store( writer, sb.toString() );
         }
         finally
         {
             writer.close();
         }
+    }
+
+    void initFromMojo( AggregatorAddThirdPartyMojo mojo, MavenProject mavenProject,
+            List<MavenProject> reactorProjects ) throws Exception
+    {
+        project = mavenProject;
+        deployMissingFile = mojo.deployMissingFile;
+        useRepositoryMissingFiles = mojo.useRepositoryMissingFiles;
+        acceptPomPackaging = mojo.acceptPomPackaging;
+        includeOptional = mojo.includeOptional;
+        excludedScopes = mojo.excludedScopes;
+        includedScopes = mojo.includedScopes;
+        excludedGroups = mojo.excludedGroups;
+        includedGroups = mojo.includedGroups;
+        excludedArtifacts = mojo.excludedArtifacts;
+        includedArtifacts = mojo.includedArtifacts;
+        includeTransitiveDependencies = mojo.includeTransitiveDependencies;
+        excludeTransitiveDependencies = mojo.excludeTransitiveDependencies;
+        thirdPartyFilename = mojo.thirdPartyFilename;
+        useMissingFile = mojo.useMissingFile;
+        String absolutePath = mojo.getProject().getBasedir().getAbsolutePath();
+
+        missingFile = new File( project.getBasedir(),
+                mojo.missingFile.getAbsolutePath().substring( absolutePath.length() ) );
+        resolvedOverrideUrl  = mojo.resolvedOverrideUrl;
+        missingLicensesFileArtifact = mojo.missingLicensesFileArtifact;
+        localRepository = mojo.localRepository;
+        dependencies = new HashSet<>( mavenProject.getDependencyArtifacts() );
+        licenseMerges = mojo.licenseMerges;
+        licenseMergesFile = mojo.licenseMergesFile;
+        includedLicenses = mojo.includedLicenses;
+        excludedLicenses = mojo.excludedLicenses;
+        bundleThirdPartyPath = mojo.bundleThirdPartyPath;
+        generateBundle = mojo.generateBundle;
+        force = mojo.force;
+        failIfWarning = mojo.failIfWarning;
+        failOnMissing = mojo.failOnMissing;
+        failOnBlacklist = mojo.failOnBlacklist;
+        sortArtifactByName = mojo.sortArtifactByName;
+        fileTemplate = mojo.fileTemplate;
+        session = mojo.session;
+        verbose = mojo.verbose;
+        encoding = mojo.encoding;
+
+        setLog( mojo.getLog() );
+
+        isAggregatorBuild = true;
+        reactorProjectDependencies = reactorProjects;
+
+        init();
+
+        consolidate();
     }
 }

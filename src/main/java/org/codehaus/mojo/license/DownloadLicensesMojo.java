@@ -7,71 +7,55 @@ package org.codehaus.mojo.license;
  * Copyright (C) 2010 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
  */
 
-import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.repository.ArtifactRepository;
-import org.apache.maven.model.License;
-import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.Component;
+import java.util.Map;
+import java.util.TreeMap;
+
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
-import org.apache.maven.settings.Proxy;
-import org.codehaus.mojo.license.api.DependenciesTool;
-import org.codehaus.mojo.license.api.MavenProjectDependenciesConfigurator;
-import org.codehaus.mojo.license.model.ProjectLicenseInfo;
-import org.codehaus.mojo.license.osgi.JarEmbeddedFiles;
-import org.codehaus.mojo.license.utils.FileUtil;
-import org.codehaus.mojo.license.utils.LicenseDownloader;
-import org.codehaus.mojo.license.utils.LicenseSummaryReader;
-import org.codehaus.mojo.license.utils.LicenseSummaryWriter;
-import org.codehaus.plexus.util.Base64;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedMap;
+import org.codehaus.mojo.license.api.ResolvedProjectDependencies;
+import org.codehaus.mojo.license.download.LicensedArtifact;
 
 /**
  * Download the license files of all the current project's dependencies, and generate a summary file containing a list
  * of all dependencies and their licenses.
+ * <p>
+ * The license files will be downloaded to {@link AbstractDownloadLicensesMojo#licensesOutputDirectory} to be included
+ * in the final packaging of the project if desired. The licenses are downloaded from the url field of the dependency
+ * POM.
+ * <p>
+ * If the license information (license name and license URL) is missing or otherwise broken in a dependency POM, this
+ * mojo offers several fallback options:
+ * <ul>
+ * <li>{@link AbstractDownloadLicensesMojo#licensesConfigFile}</li>
+ * <li>{@link AbstractDownloadLicensesMojo#errorRemedy}</li>
+ * <li>{@link AbstractDownloadLicensesMojo#licenseUrlReplacements}</li>
+ * <li>{@link AbstractDownloadLicensesMojo#licenseUrlFileNames}</li>
+ * </ul>
  *
  * @author Paul Gier
- * @version $Revision$
  * @since 1.0
  */
 @Mojo( name = "download-licenses", requiresDependencyResolution = ResolutionScope.TEST,
-       defaultPhase = LifecyclePhase.PACKAGE )
+    defaultPhase = LifecyclePhase.PACKAGE )
 public class DownloadLicensesMojo
-    extends AbstractMojo
-    implements MavenProjectDependenciesConfigurator
+    extends AbstractDownloadLicensesMojo
 {
 
     // ----------------------------------------------------------------------
@@ -79,550 +63,32 @@ public class DownloadLicensesMojo
     // ----------------------------------------------------------------------
 
     /**
-     * Location of the local repository.
-     *
-     * @since 1.0
-     */
-    @Parameter( defaultValue = "${localRepository}", readonly = true )
-    protected ArtifactRepository localRepository;
-
-    /**
-     * List of Remote Repositories used by the resolver
-     *
-     * @since 1.0
-     */
-    @Parameter( defaultValue = "${project.remoteArtifactRepositories}", readonly = true )
-    protected List remoteRepositories;
-
-    /**
-     * Only consider local repository to resolve artifacts. Speeds up the process.
-     *
-     * @since 1.9
-     */
-    @Parameter( defaultValue = "false" )
-    private boolean skipRemoteRepositories;
-
-    /**
-     * Input file containing a mapping between each dependency and it's license information.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "licensesConfigFile", defaultValue = "${project.basedir}/src/license/licenses.xml" )
-    private File licensesConfigFile;
-
-    /**
-     * The directory to which the dependency licenses should be written.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "licensesOutputDirectory",
-                defaultValue = "${project.build.directory}/generated-resources/licenses" )
-    private File licensesOutputDirectory;
-
-    /**
-     * The output file containing a mapping between each dependency and it's license information.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "licensesOutputFile",
-                defaultValue = "${project.build.directory}/generated-resources/licenses.xml" )
-    private File licensesOutputFile;
-
-    /**
-     * A filter to exclude some scopes.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "license.excludedScopes", defaultValue = "system" )
-    private String excludedScopes;
-
-    /**
-     * A filter to include only some scopes, if let empty then all scopes will be used (no filter).
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "license.includedScopes", defaultValue = "" )
-    private String includedScopes;
-
-    /**
-     * Settings offline flag (will not download anything if setted to true).
-     *
-     * @since 1.0
-     */
-    @Parameter( defaultValue = "${settings.offline}" )
-    private boolean offline;
-
-    /**
-     * Don't show warnings about bad or missing license files.
-     *
-     * @since 1.0
-     */
-    @Parameter( defaultValue = "false" )
-    private boolean quiet;
-
-    /**
-     * Include transitive dependencies when downloading license files.
-     *
-     * @since 1.0
-     */
-    @Parameter( defaultValue = "true" )
-    private boolean includeTransitiveDependencies;
-
-    /**
-     * Get declared proxies from the {@code settings.xml} file.
-     *
-     * @since 1.4
-     */
-    @Parameter( defaultValue = "${settings.proxies}", readonly = true )
-    private List<Proxy> proxies;
-
-    /**
      * A flag to skip the goal.
      *
      * @since 1.5
      */
-    @Parameter( property = "license.skipDownloadLicenses", defaultValue = "false")
+    @Parameter( property = "license.skipDownloadLicenses", defaultValue = "false" )
     protected boolean skipDownloadLicenses;
 
     // ----------------------------------------------------------------------
-    // Plexus Components
-    // ----------------------------------------------------------------------
-
-    /**
-     * The Maven Project Object
-     *
-     * @since 1.0
-     */
-    @Component
-    protected MavenProject project;
-
-    /**
-     * Dependencies tool.
-     *
-     * @since 1.0
-     */
-    @Component
-    private DependenciesTool dependenciesTool;
-
-    @Component
-    private JarEmbeddedFiles embeddedJarFiles;
-
-    // ----------------------------------------------------------------------
-    // Private Fields
-    // ----------------------------------------------------------------------
-
-    /**
-     * Keeps a collection of the URLs of the licenses that have been downlaoded. This helps the plugin to avoid
-     * downloading the same license multiple times.
-     */
-    private Set<String> downloadedLicenseURLs = new HashSet<String>();
-
-    /**
-     * Proxy Login/Password encoded(only if usgin a proxy with authentication).
-     *
-     * @since 1.4
-     */
-    private String proxyLoginPasswordEncoded;
-
-    // ----------------------------------------------------------------------
-    // Mojo Implementation
+    // AbstractDownloadLicensesMojo Implementation
     // ----------------------------------------------------------------------
 
     /**
      * {@inheritDoc}
      */
-    public void execute()
-        throws MojoExecutionException
+    protected boolean isSkip()
     {
-
-        if ( offline )
-        {
-
-            getLog().warn( "Offline flag is on, download-licenses goal is skip." );
-            return;
-        }
-        if ( skipDownloadLicenses )
-        {
-            getLog().info( "skip flag is on, will skip goal." );
-            return;
-        }
-
-        initDirectories();
-
-        initProxy();
-
-        Map<String, ProjectLicenseInfo> configuredDepLicensesMap = new HashMap<String, ProjectLicenseInfo>();
-
-        // License info from previous build
-        if ( licensesOutputFile.exists() )
-        {
-            loadLicenseInfo( configuredDepLicensesMap, licensesOutputFile, true );
-        }
-
-        // Manually configured license info, loaded second to override previously loaded info
-        if ( licensesConfigFile.exists() )
-        {
-            loadLicenseInfo( configuredDepLicensesMap, licensesConfigFile, false );
-        }
-
-        List<ArtifactRepository> enabledRemoteRepositories =
-            skipRemoteRepositories ? new ArrayList() : remoteRepositories;
-        SortedMap<String, MavenProject> dependencies =
-            dependenciesTool.loadProjectDependencies( project, this, localRepository, enabledRemoteRepositories, null );
-
-        // The resulting list of licenses after dependency resolution
-        List<ProjectLicenseInfo> depProjectLicenses = new ArrayList<ProjectLicenseInfo>();
-
-        for ( MavenProject project : dependencies.values() )
-        {
-            Artifact artifact = project.getArtifact();
-            getLog().debug( "Checking licenses for project " + artifact );
-            String artifactProjectId = getArtifactProjectId( artifact );
-            ProjectLicenseInfo depProject;
-            if ( configuredDepLicensesMap.containsKey( artifactProjectId ) )
-            {
-                depProject = configuredDepLicensesMap.get( artifactProjectId );
-                depProject.setVersion( artifact.getVersion() );
-            }
-            else
-            {
-                depProject = createDependencyProject( project );
-            }
-            downloadLicenses( depProject );
-            depProjectLicenses.add( depProject );
-        }
-
-        try
-        {
-            LicenseSummaryWriter.writeLicenseSummary( depProjectLicenses, licensesOutputFile );
-        }
-        catch ( Exception e )
-        {
-            throw new MojoExecutionException( "Unable to write license summary file: " + licensesOutputFile, e );
-        }
+        return skipDownloadLicenses;
     }
 
-    // ----------------------------------------------------------------------
-    // MavenProjectDependenciesConfigurator Implementation
-    // ----------------------------------------------------------------------
-
-    /**
-     * {@inheritDoc}
-     */
-    public boolean isIncludeTransitiveDependencies()
+    protected Map<String, LicensedArtifact> getDependencies()
     {
-        return includeTransitiveDependencies;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public List<String> getExcludedScopes()
-    {
-        String[] split = excludedScopes == null ? new String[0] : excludedScopes.split( "," );
-        return Arrays.asList( split );
-    }
-
-    public void setExcludedScopes( String excludedScopes )
-    {
-        this.excludedScopes = excludedScopes;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public List<String> getIncludedScopes()
-    {
-        String[] split = includedScopes == null ? new String[0] : includedScopes.split( "," );
-        return Arrays.asList( split );
-    }
-
-    // not used at the moment
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getIncludedArtifacts()
-    {
-        return null;
-    }
-
-    // not used at the moment
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getIncludedGroups()
-    {
-        return null;
-    }
-
-    // not used at the moment
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getExcludedGroups()
-    {
-        return null;
-    }
-
-    // not used at the moment
-
-    /**
-     * {@inheritDoc}
-     */
-    public String getExcludedArtifacts()
-    {
-        return null;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public boolean isVerbose()
-    {
-        return getLog().isDebugEnabled();
-    }
-
-    // ----------------------------------------------------------------------
-    // Private Methods
-    // ----------------------------------------------------------------------
-
-    private void initDirectories()
-        throws MojoExecutionException
-    {
-        try
-        {
-            FileUtil.createDirectoryIfNecessary( licensesOutputDirectory );
-
-            FileUtil.createDirectoryIfNecessary( licensesOutputFile.getParentFile() );
-        }
-        catch ( IOException e )
-        {
-            throw new MojoExecutionException( "Unable to create a directory...", e );
-        }
-    }
-
-    private void initProxy()
-        throws MojoExecutionException
-    {
-        Proxy proxyToUse = null;
-        for ( Proxy proxy : proxies )
-        {
-            if ( proxy.isActive() && "http".equals( proxy.getProtocol() ) )
-            {
-
-                // found our proxy
-                proxyToUse = proxy;
-                break;
-            }
-        }
-        if ( proxyToUse != null )
-        {
-
-            System.getProperties().put( "proxySet", "true" );
-            System.setProperty( "proxyHost", proxyToUse.getHost() );
-            System.setProperty( "proxyPort", String.valueOf( proxyToUse.getPort() ) );
-            if(proxyToUse.getNonProxyHosts() != null)
-            {
-                System.setProperty( "nonProxyHosts", proxyToUse.getNonProxyHosts() );
-            }
-            if ( proxyToUse.getUsername() != null )
-            {
-                String loginPassword = proxyToUse.getUsername() + ":" + proxyToUse.getPassword();
-                proxyLoginPasswordEncoded = new String( Base64.encodeBase64( loginPassword.getBytes() ) );
-            }
-        }
-    }
-
-    /**
-     * Load the license information contained in a file if it exists. Will overwrite existing license information in the
-     * map for dependencies with the same id. If the config file does not exist, the method does nothing.
-     *
-     * @param configuredDepLicensesMap A map between the dependencyId and the license info
-     * @param licenseConfigFile        The license configuration file to load
-     * @param previouslyDownloaded     Whether these licenses were already downloaded
-     * @throws MojoExecutionException if could not load license infos
-     */
-    private void loadLicenseInfo( Map<String, ProjectLicenseInfo> configuredDepLicensesMap, File licenseConfigFile,
-                                  boolean previouslyDownloaded )
-        throws MojoExecutionException
-    {
-        FileInputStream fis = null;
-        try
-        {
-            fis = new FileInputStream( licenseConfigFile );
-            List<ProjectLicenseInfo> licensesList = LicenseSummaryReader.parseLicenseSummary( fis );
-            for ( ProjectLicenseInfo dep : licensesList )
-            {
-                configuredDepLicensesMap.put( dep.getId(), dep );
-                if ( previouslyDownloaded )
-                {
-                    for ( License license : dep.getLicenses() )
-                    {
-                        // Save the URL so we don't download it again
-                        downloadedLicenseURLs.add( license.getUrl() );
-                    }
-                }
-            }
-        }
-        catch ( Exception e )
-        {
-            throw new MojoExecutionException( "Unable to parse license summary output file: " + licenseConfigFile, e );
-        }
-        finally
-        {
-            FileUtil.tryClose( fis );
-        }
-    }
-
-    /**
-     * Returns the project ID for the artifact
-     *
-     * @param artifact the artifact
-     * @return groupId:artifactId
-     */
-    private String getArtifactProjectId( Artifact artifact )
-    {
-        return artifact.getGroupId() + ":" + artifact.getArtifactId();
-    }
-
-    /**
-     * Create a simple DependencyProject object containing the GAV and license info from the Maven Artifact
-     *
-     * @param depMavenProject the dependency maven project
-     * @return DependencyProject with artifact and license info
-     */
-    protected ProjectLicenseInfo createDependencyProject( MavenProject depMavenProject )
-    {
-        ProjectLicenseInfo dependencyProject =
-            new ProjectLicenseInfo( depMavenProject.getGroupId(), depMavenProject.getArtifactId(),
-                                    depMavenProject.getVersion() );
-        List<?> licenses = depMavenProject.getLicenses();
-        for ( Object license : licenses )
-        {
-            dependencyProject.addLicense( (License) license );
-        }
-        return dependencyProject;
-    }
-
-    /**
-     * Determine filename to use for downloaded license file. The file name is based on the configured name of the
-     * license (if available) and the remote filename of the license.
-     *
-     * @param license the license
-     * @return A filename to be used for the downloaded license file
-     * @throws MalformedURLException if the license url is malformed
-     */
-    private String getLicenseFileName( License license )
-        throws MalformedURLException
-    {
-        URL licenseUrl = new URL( license.getUrl() );
-        File licenseUrlFile = new File( licenseUrl.getPath() );
-        String licenseFileName = licenseUrlFile.getName();
-
-        if ( license.getName() != null )
-        {
-            licenseFileName = license.getName() + " - " + licenseUrlFile.getName();
-        }
-
-        if ( embeddedJarFiles.isLocalJarPath( license.getUrl() ) )
-        {
-            licenseFileName = license.getName() + "/" + embeddedJarFiles.getLocalFilepath( license.getUrl() );
-        }
-
-        // Check if the file has a valid file extention
-        final String defaultExtension = ".txt";
-        int extensionIndex = licenseFileName.lastIndexOf( "." );
-        if ( extensionIndex == -1 || extensionIndex > ( licenseFileName.length() - 3 ) )
-        {
-            // This means it isn't a valid file extension, so append the default
-            licenseFileName = licenseFileName + defaultExtension;
-        }
-
-        // Force lower case so we don't end up with multiple copies of the same license
-        licenseFileName = licenseFileName.toLowerCase();
-
-        return licenseFileName;
-    }
-
-    /**
-     * Download the licenses associated with this project
-     *
-     * @param depProject The project which generated the dependency
-     */
-    private void downloadLicenses( ProjectLicenseInfo depProject )
-    {
-
-        getLog().debug( "Downloading license(s) for project " + depProject );
-
-        List<License> licenses = depProject.getLicenses();
-
-        if ( depProject.getLicenses() == null || depProject.getLicenses().isEmpty() )
-        {
-            if ( !quiet )
-            {
-                getLog().warn( "No license information available for: " + depProject );
-            }
-            return;
-        }
-
-        for ( License license : licenses )
-        {
-            try
-            {
-                String licenseFileName = getLicenseFileName( license );
-
-                File licenseOutputFile = new File( licensesOutputDirectory, licenseFileName );
-                if ( licenseOutputFile.exists() )
-                {
-                    continue;
-                }
-                ensureParentDirExists( licenseOutputFile );
-                if ( !downloadedLicenseURLs.contains( license.getUrl() ) )
-                {
-                    LicenseDownloader.downloadLicense( license.getUrl(), proxyLoginPasswordEncoded, licenseOutputFile );
-                    downloadedLicenseURLs.add( license.getUrl() );
-                }
-            }
-            catch ( MalformedURLException e )
-            {
-                if ( !quiet )
-                {
-                    getLog().warn( "POM for dependency " + depProject.toString() + " has an invalid license URL: " +
-                                       license.getUrl() );
-                }
-            }
-            catch ( FileNotFoundException e )
-            {
-                if ( !quiet )
-                {
-                    getLog().warn( "POM for dependency " + depProject.toString() +
-                                       " has a license URL that returns file not found: " + license.getUrl() );
-                }
-            }
-            catch ( IOException e )
-            {
-                getLog().warn( "Unable to retrieve license for dependency: " + depProject.toString() );
-                getLog().warn( license.getUrl() );
-                getLog().warn( e.getMessage() );
-            }
-            finally
-            {
-                embeddedJarFiles.convertUrlToLocalFile( license );
-            }
-        }
-
-    }
-
-    private void ensureParentDirExists( File file )
-    {
-        File parent = file.getParentFile();
-        if ( !parent.exists() )
-        {
-            parent.mkdirs();
-        }
+        final Map<String, LicensedArtifact> result = new TreeMap<>();
+        licensedArtifactResolver.loadProjectDependencies(
+                new ResolvedProjectDependencies( project.getArtifacts(), project.getDependencyArtifacts() ),
+                this, remoteRepositories, result );
+        return result;
     }
 
 }

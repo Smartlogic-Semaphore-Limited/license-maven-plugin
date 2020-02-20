@@ -7,16 +7,16 @@ package org.codehaus.mojo.license;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -28,6 +28,8 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.codehaus.mojo.license.model.License;
 import org.codehaus.mojo.license.model.LicenseStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -37,13 +39,14 @@ import java.util.List;
 /**
  * Display all available licenses.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 @Mojo( name = "license-list", requiresProject = false, requiresDirectInvocation = true )
 public class LicenseListMojo
     extends AbstractLicenseMojo
 {
+    private static final Logger LOG = LoggerFactory.getLogger( LicenseListMojo.class );
 
     // ----------------------------------------------------------------------
     // Mojo Parameters
@@ -52,7 +55,8 @@ public class LicenseListMojo
     /**
      * The url of an extra license repository.
      * <p>
-     * <strong>Note: </strong>If you want to refer to a file within this project, start the expression with <code>${project.baseUri}</code>
+     * <strong>Note: </strong>If you want to refer to a file within this project, start the expression with
+     * <code>${project.baseUri}</code>
      * </p>
      * @since 1.0
      */
@@ -84,7 +88,8 @@ public class LicenseListMojo
      * {@inheritDoc}
      */
     @Override
-    public boolean isSkip() {
+    public boolean isSkip()
+    {
         // can't skip this goal since direct invocation is required
         return false;
     }
@@ -98,7 +103,7 @@ public class LicenseListMojo
     {
 
         // obtain licenses store
-        licenseStore = LicenseStore.createLicenseStore( getLog(), extraResolver );
+        licenseStore = LicenseStore.createLicenseStore( extraResolver );
     }
 
     /**
@@ -151,6 +156,6 @@ public class LicenseListMojo
                 }
             }
         }
-        getLog().info( buffer.toString() );
+        LOG.info( "{}", buffer );
     }
 }

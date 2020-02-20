@@ -22,15 +22,19 @@ package org.codehaus.mojo.license.utils;
  * #L%
  */
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.maven.plugin.MojoExecutionException;
+
 import java.util.ArrayList;
 import java.util.List;
 
+
 /**
  * Object to convert in mojo a parameter from a some simple String to a List.
- * <p/>
+ *
  * See (http://jira.codehaus.org/browse/MLICENSE-53).
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.4
  */
 public class StringToList
@@ -43,16 +47,32 @@ public class StringToList
 
     public StringToList()
     {
-        data = new ArrayList<String>();
+        data = new ArrayList<>();
     }
 
-    public StringToList( String data )
+   /**
+    * @param data a list of licenses or a URL
+    */
+    public StringToList( String data ) throws MojoExecutionException
     {
-        this();
+      this();
+      if ( !UrlRequester.isStringUrl( data ) )
+      {
         for ( String s : data.split( "\\s*\\|\\s*" ) )
         {
-            addEntryToList( s );
+          addEntryToList( s );
         }
+      }
+      else
+      {
+        for ( String license : UrlRequester.downloadList( data ) )
+        {
+          if ( data != null && StringUtils.isNotBlank( license ) && !this.data.contains( license ) )
+          {
+            this.data.add( license );
+          }
+        }
+      }
     }
 
     public List<String> getData()

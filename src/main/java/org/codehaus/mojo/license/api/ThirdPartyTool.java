@@ -23,8 +23,8 @@ package org.codehaus.mojo.license.api;
  */
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.model.License;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.mojo.license.model.LicenseMap;
 import org.codehaus.mojo.license.utils.SortedProperties;
@@ -36,13 +36,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.ArtifactResolutionException;
+import org.eclipse.aether.transfer.ArtifactNotFoundException;
 
 /**
  * A tool to load third party files missing files.
- * <p/>
+ * <p>
  * We should put here all the logic code written in some mojo and licenseMap...
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public interface ThirdPartyTool
@@ -70,14 +73,14 @@ public interface ThirdPartyTool
     void setVerbose( boolean verbose );
 
     /**
-     * Collect license information from property file, 'third-party' classified artifacts, and .license.properties dependencies.
+     * Collect license information from property file, 'third-party' classified artifacts, and .license.properties
+     * dependencies.
      *
      * @param dependencies       top-level dependencies to scan for .license.properties files.
      * @param encoding           encoding used to read or write properties files
      * @param projects           all projects where to read third parties descriptors
      * @param unsafeProjects     all unsafe projects
      * @param licenseMap         license map where to store new licenses
-     * @param localRepository    local repository
      * @param remoteRepositories remote repositories
      * @return the map of loaded missing from the remote missing third party files
      * @throws ThirdPartyToolException if any
@@ -87,13 +90,12 @@ public interface ThirdPartyTool
                                                                 Collection<MavenProject> projects,
                                                                 SortedSet<MavenProject> unsafeProjects,
                                                                 LicenseMap licenseMap,
-                                                                ArtifactRepository localRepository,
-                                                                List<ArtifactRepository> remoteRepositories )
-        throws ThirdPartyToolException, IOException;
+                                                                List<RemoteRepository> remoteRepositories )
+            throws ThirdPartyToolException, IOException;
 
     /**
      * For the given {@code project}, attach the given {@code file} as a third-party file.
-     * <p/>
+     * <p>
      * The file will be attached as with a classifier {@code third-parties} and a type {@code properties}.
      *
      * @param project the project on which to attch the third-party file
@@ -103,18 +105,20 @@ public interface ThirdPartyTool
 
     /**
      * Obtain the third party file from the repository.
-     * <p/>
-     * Will first search in the local repository, then into the remote repositories and will resolv it.
+     * <p>
+     * Will first search in the local repository, then into the remote repositories and will resolve it.
      *
      * @param project         the project
-     * @param localRepository the local repository
-     * @param repositories    the remote repositories
+     * @param remoteRepositories    the remote repositories
      * @return the locale file resolved into the local repository
      * @throws ThirdPartyToolException if any
      */
-    File resolvThirdPartyDescriptor( MavenProject project, ArtifactRepository localRepository,
-                                     List<ArtifactRepository> repositories )
-        throws ThirdPartyToolException;
+    File resolvThirdPartyDescriptor( MavenProject project, List<RemoteRepository> remoteRepositories )
+            throws ThirdPartyToolException;
+
+    File resolveMissingLicensesDescriptor( String groupId, String artifactId, String version,
+                                     List<RemoteRepository> remoteRepositories )
+            throws IOException, ArtifactResolutionException, ArtifactNotFoundException;
 
     /**
      * From the given {@code licenseMap}, obtain all the projects with no license.
@@ -123,21 +127,36 @@ public interface ThirdPartyTool
      * @param doLog      a flag to add debug logs
      * @return the set of projects with no license
      */
-    SortedSet<MavenProject> getProjectsWithNoLicense( LicenseMap licenseMap, boolean doLog );
+    SortedSet<MavenProject> getProjectsWithNoLicense( LicenseMap licenseMap );
 
     /**
      * Loads unsafe mapping and returns it.
      *
-     * @param licenseMap    license map
-     * @param artifactCache cache of dependencies (used for id migration from missing file)
-     * @param encoding      encoding used to load missing file
-     * @param missingFile   location of the optional missing file
+     * @param licenseMap      license map
+     * @param artifactCache   cache of dependencies (used for id migration from missing file)
+     * @param encoding        encoding used to load missing file
+     * @param missingFile     location of the optional missing file
+     * @param missingFileUrl  location of an optional missing file extension that can be downloaded from some
+     *                        resource hoster and that will be merged with the content of the missing file.
      * @return the unsafe mapping
      * @throws IOException if pb while reading missing file
      */
     SortedProperties loadUnsafeMapping( LicenseMap licenseMap, SortedMap<String, MavenProject> artifactCache,
-                                        String encoding, File missingFile )
-        throws IOException;
+                                        String encoding, File missingFile, String missingFileUrl )
+            throws IOException, MojoExecutionException;
+
+    /**
+     * Override licenses from override file.
+     *
+     * @param licenseMap    license map
+     * @param artifactCache cache of dependencies (used for id migration from missing file)
+     * @param encoding      encoding used to load override file
+     * @param overrideUrl   location of an optional override file extension that can be downloaded from some resource
+     *                      hoster
+     * @throws IOException if pb while reading override file
+     */
+    void overrideLicenses( LicenseMap licenseMap, SortedMap<String, MavenProject> artifactCache, String encoding,
+            String overrideUrl ) throws IOException;
 
     /**
      * Add one or more licenses (name and url are {@code licenseNames}) to the given {@code licenseMap} for the given
@@ -169,7 +188,7 @@ public interface ThirdPartyTool
 
     /**
      * For a given {@code licenseMap}, merge all {@code licenses}.
-     * <p/>
+     * <p>
      * The first value of the {@code licenses} is the license to keep and all other values will be merged into the
      * first one.
      *
@@ -191,7 +210,7 @@ public interface ThirdPartyTool
      */
     void writeThirdPartyFile( LicenseMap licenseMap, File thirdPartyFile, boolean verbose, String encoding,
                               String template )
-        throws IOException;
+            throws IOException;
 
     /**
      * Writes the bundled version of the third-party file.
@@ -202,5 +221,5 @@ public interface ThirdPartyTool
      * @throws IOException if any problem while writing file
      */
     void writeBundleThirdPartyFile( File thirdPartyFile, File outputDirectory, String bundleThirdPartyPath )
-        throws IOException;
+            throws IOException;
 }

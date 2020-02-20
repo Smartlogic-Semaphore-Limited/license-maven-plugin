@@ -7,16 +7,16 @@ package org.codehaus.mojo.license.model;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -40,7 +40,7 @@ import java.util.TreeSet;
 /**
  * Map of artifacts (stub in mavenproject) group by their license.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public class LicenseMap
@@ -58,7 +58,12 @@ public class LicenseMap
      */
     public LicenseMap()
     {
-        projectComparator = MojoHelper.newMavenProjectComparator();
+        this( MojoHelper.newMavenProjectComparator() );
+    }
+
+    public LicenseMap( Comparator<MavenProject> projectComparator )
+    {
+        this.projectComparator = projectComparator;
     }
 
     /**
@@ -76,11 +81,37 @@ public class LicenseMap
         if ( valueList == null )
         {
 
-            valueList = new TreeSet<MavenProject>( projectComparator );
+            valueList = new TreeSet<>( projectComparator );
         }
 
         valueList.add( value );
         return put( key, valueList );
+    }
+
+    /**
+     * Store in the license other licenseMap.
+     *
+     * @param licenseMap license map to put
+     */
+    public void putAll( LicenseMap licenseMap )
+    {
+        for ( Map.Entry<String, SortedSet<MavenProject>> entry : licenseMap.entrySet() )
+        {
+
+            String key = entry.getKey();
+
+            // handle multiple values as a set to avoid duplicates
+            SortedSet<MavenProject> valueList = get( key );
+            if ( valueList == null )
+            {
+
+                valueList = new TreeSet<>( projectComparator );
+            }
+
+            valueList.addAll( entry.getValue() );
+            put( key, valueList );
+        }
+
     }
 
     /**
@@ -91,7 +122,7 @@ public class LicenseMap
      */
     public SortedMap<MavenProject, String[]> toDependencyMap()
     {
-        SortedMap<MavenProject, Set<String>> tmp = new TreeMap<MavenProject, Set<String>>( projectComparator );
+        SortedMap<MavenProject, Set<String>> tmp = new TreeMap<>( projectComparator );
 
         for ( Map.Entry<String, SortedSet<MavenProject>> entry : entrySet() )
         {
@@ -102,17 +133,17 @@ public class LicenseMap
                 Set<String> list = tmp.get( p );
                 if ( list == null )
                 {
-                    list = new HashSet<String>();
+                    list = new HashSet<>();
                     tmp.put( p, list );
                 }
                 list.add( license );
             }
         }
 
-        SortedMap<MavenProject, String[]> result = new TreeMap<MavenProject, String[]>( projectComparator );
+        SortedMap<MavenProject, String[]> result = new TreeMap<>( projectComparator );
         for ( Map.Entry<MavenProject, Set<String>> entry : tmp.entrySet() )
         {
-            List<String> value = new ArrayList<String>( entry.getValue() );
+            List<String> value = new ArrayList<>( entry.getValue() );
             Collections.sort( value );
             result.put( entry.getKey(), value.toArray( new String[value.size()] ) );
         }
@@ -122,17 +153,24 @@ public class LicenseMap
 
     public LicenseMap toLicenseMapOrderByName()
     {
-        LicenseMap result = new LicenseMap();
+        LicenseMap result = new LicenseMap( MojoHelper.newMavenProjectComparatorByName() );
+        result.putAll( this );
+        return result;
+    }
 
-        Comparator<MavenProject> mavenProjectComparator = MojoHelper.newMavenProjectComparatorByName();
+    public void removeProject( MavenProject project )
+    {
         for ( Map.Entry<String, SortedSet<MavenProject>> entry : entrySet() )
         {
-            String licenseKey = entry.getKey();
-            SortedSet<MavenProject> projects =
-                new TreeSet<MavenProject>( mavenProjectComparator );
-            projects.addAll( entry.getValue() );
-            result.put( licenseKey, projects );
+            SortedSet<MavenProject> projects = entry.getValue();
+            for ( MavenProject mavenProject : projects )
+            {
+                if ( project.equals( mavenProject ) )
+                {
+                    get( entry.getKey() ).remove( project );
+                    return;
+                }
+            }
         }
-        return result;
     }
 }

@@ -24,7 +24,7 @@ package org.codehaus.mojo.license;
 
 import org.apache.maven.artifact.ArtifactUtils;
 import org.apache.maven.doxia.sink.Sink;
-import org.apache.maven.doxia.sink.SinkEventAttributeSet;
+import org.apache.maven.doxia.sink.impl.SinkEventAttributeSet;
 import org.apache.maven.doxia.sink.SinkEventAttributes;
 import org.apache.maven.reporting.AbstractMavenReportRenderer;
 import org.codehaus.mojo.license.api.ThirdPartyDetails;
@@ -36,7 +36,7 @@ import java.util.Locale;
 /**
  * Base class for report renderers.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.1
  */
 public abstract class AbstractLicenseReportRenderer
@@ -121,8 +121,8 @@ public abstract class AbstractLicenseReportRenderer
 
     protected String getGAV( ThirdPartyDetails details )
     {
-        return ArtifactUtils.versionlessKey( details.getGroupId(), details.getArtifactId() ) + ":" +
-            details.getVersion();
+        return ArtifactUtils.versionlessKey( details.getGroupId(), details.getArtifactId() ) + ":"
+                + details.getVersion();
     }
 
     protected void renderThirdPartySummaryTableHeader()
@@ -217,7 +217,7 @@ public abstract class AbstractLicenseReportRenderer
 
         sink.tableCell();
         String gav = getGAV( details );
-        sink.link( "./third-party-report.html#" + gav );
+        sink.link( "#" + gav );
         sink.text( gav );
         sink.link_();
 
@@ -271,8 +271,10 @@ public abstract class AbstractLicenseReportRenderer
         }
     }
 
+    // CHECKSTYLE_OFF: MethodName
     protected void safeBold_()
     {
+        // CHECKSTYLE_ON: MethodName
         try
         {
             sink.bold_();
@@ -295,8 +297,10 @@ public abstract class AbstractLicenseReportRenderer
         }
     }
 
+    // CHECKSTYLE_OFF: MethodName
     protected void safeItalic_()
     {
+        // CHECKSTYLE_ON: MethodName
         try
         {
             sink.italic_();

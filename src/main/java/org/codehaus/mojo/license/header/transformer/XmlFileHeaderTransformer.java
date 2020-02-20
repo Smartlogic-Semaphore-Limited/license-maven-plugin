@@ -7,16 +7,16 @@ package org.codehaus.mojo.license.header.transformer;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -27,7 +27,7 @@ import org.codehaus.plexus.component.annotations.Component;
 /**
  * Implementation of {@link FileHeaderTransformer} for xml format.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 @Component( role = FileHeaderTransformer.class, hint = "xml" )
@@ -48,8 +48,8 @@ public class XmlFileHeaderTransformer
      */
     public String[] getDefaultAcceptedExtensions()
     {
-        return new String[]{ "pom", "xml", "xhtml", "mxlm", "dtd", "fml", "xsl", "html", "htm", "jaxx", "kml", "gsp",
-            "tml" };
+        return new String[]{ "pom", "xml", "mxlm", "dtd", "fml", "xsl", "jaxx", "kml", "gsp",
+            "tml", "svg" };
     }
 
     /**
@@ -88,7 +88,7 @@ public class XmlFileHeaderTransformer
 
             // prolog detected
             content = content.substring( prolog.length() );
-            result = super.addHeader( prolog + '\n' + header, content );
+            result = super.addHeader( prolog + LINE_SEPARATOR + header, content );
         }
         return result;
     }

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<licenseSummary>
+  <dependencies>
+    <dependency>
+      <groupId>\Qaopalliance\E</groupId>
+      <artifactId>\Qaopalliance\E</artifactId>
+      <version>\Q1.0\E</version>
+      <matchLicenses>
+        <license>
+          <name>\QPublic Domain\E</name>
+        </license>
+      </matchLicenses>
+      <licenses>
+        <!-- Manually fix the existing license nodes: -->
+        <license>
+          <name>Public Domain</name>
+        </license>
+      </licenses>
+      <downloaderMessages>
+        <downloaderMessage>No URL for license at index 0 in dependency aopalliance:aopalliance:1.0</downloaderMessage>
+      </downloaderMessages>
+    </dependency>
+    <dependency>
+      <groupId>\Qgroovy\E</groupId>
+      <artifactId>\Qgroovy-all\E</artifactId>
+      <version>\Q1.0-jsr-04\E</version>
+      <matchLicenses>
+        <!-- Match dependency with no licenses -->
+      </matchLicenses>
+      <licenses>
+        <!-- Manually add license elements here: -->
+      </licenses>
+      <downloaderMessages>
+        <downloaderMessage>No license information available for: groovy:groovy-all:1.0-jsr-04</downloaderMessage>
+      </downloaderMessages>
+    </dependency>
+  </dependencies>
+</licenseSummary>
