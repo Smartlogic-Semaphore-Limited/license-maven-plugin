@@ -7,16 +7,16 @@ package org.codehaus.mojo.license;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -28,6 +28,8 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.codehaus.mojo.license.header.transformer.FileHeaderTransformer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,13 +40,14 @@ import java.util.Map;
 /**
  * Displays all the available comment style to box file headers.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 @Mojo( name = "comment-style-list", requiresProject = false, requiresDirectInvocation = true )
 public class CommentStyleListMojo
     extends AbstractLicenseMojo
 {
+    private static final Logger LOG = LoggerFactory.getLogger( CommentStyleListMojo.class );
 
     // ----------------------------------------------------------------------
     // Mojo Parameters
@@ -78,7 +81,8 @@ public class CommentStyleListMojo
      * {@inheritDoc}
      */
     @Override
-    public boolean isSkip() {
+    public boolean isSkip()
+    {
         // can't skip this goal since direct invocation is required
         return false;
     }
@@ -108,7 +112,7 @@ public class CommentStyleListMojo
             buffer.append( "                           license-maven-plugin\n" );
             buffer.append( "-------------------------------------------------------------------------------\n\n" );
         }
-        List<String> names = new ArrayList<String>( transformers.keySet() );
+        List<String> names = new ArrayList<>( transformers.keySet() );
         Collections.sort( names );
 
         int maxLength = 0;
@@ -142,6 +146,6 @@ public class CommentStyleListMojo
             }
         }
 
-        getLog().info( buffer.toString() );
+        LOG.info( "{}", buffer );
     }
 }

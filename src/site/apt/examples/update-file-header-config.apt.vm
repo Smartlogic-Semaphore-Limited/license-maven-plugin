@@ -5,16 +5,16 @@
 ~~ Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
 ~~ %%
 ~~ This program is free software: you can redistribute it and/or modify
-~~ it under the terms of the GNU Lesser General Public License as 
-~~ published by the Free Software Foundation, either version 3 of the 
+~~ it under the terms of the GNU Lesser General Public License as
+~~ published by the Free Software Foundation, either version 3 of the
 ~~ License, or (at your option) any later version.
-~~ 
+~~
 ~~ This program is distributed in the hope that it will be useful,
 ~~ but WITHOUT ANY WARRANTY; without even the implied warranty of
 ~~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ~~ GNU General Lesser Public License for more details.
-~~ 
-~~ You should have received a copy of the GNU General Lesser Public 
+~~
+~~ You should have received a copy of the GNU General Lesser Public
 ~~ License along with this program.  If not, see
 ~~ <http://www.gnu.org/licenses/lgpl-3.0.html>.
 ~~ #L%
@@ -36,6 +36,8 @@ Update File Header Examples
     No files are excludes by default.
 
     * extraExtensions: Dictionary of extensions to map to existing comment style.
+
+    * extraFiles: Dictionary of files to existing comment style.
 
     * customize description section: Define a template to change the description section of a file header.
 
@@ -226,6 +228,34 @@ ExtraExtensions
 -------------------------------------------------------------------------------
 
   Files with extension <<myProprietaryExtension>> will be treated as java files (says using the comment style named java).
+
+ExtraFiles
+
+  To match exact files, add a mapped parameter where keys are name of files and values are the comment style type to use.
+
+
+* Example
+
+  Given a pom with this plugin configuration:
+
+-------------------------------------------------------------------------------
+
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>${project.version}</version>
+        <configuration>
+          <extraFiles>
+            <DockerFile>properties</DockerFile>
+          </extraFiles>
+        </configuration>
+      </plugin>
+    </plugins>
+
+-------------------------------------------------------------------------------
+
+  Files named <<DockerFile>> will be treated as properties files (says using the comment style named properties).
 
 Customize the description section
 

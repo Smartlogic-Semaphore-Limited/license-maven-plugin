@@ -1,5 +1,27 @@
 package org.codehaus.mojo.license;
 
+/*
+ * #%L
+ * License Maven Plugin
+ * %%
+ * Copyright (C) 2020 Smartlogic
+ * %%
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Lesser Public License for more details.
+ *
+ * You should have received a copy of the GNU General Lesser Public
+ * License along with this program.  If not, see
+ * <http://www.gnu.org/licenses/lgpl-3.0.html>.
+ * #L%
+ */
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -15,24 +37,28 @@ import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.ArtifactUtils;
 import org.apache.maven.artifact.factory.ArtifactFactory;
+import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.artifact.resolver.ArtifactResolver;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.License;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
+import org.codehaus.mojo.license.download.LicensedArtifact;
+import org.codehaus.mojo.license.download.ProjectLicense;
+import org.codehaus.mojo.license.download.ProjectLicenseInfo;
 import org.codehaus.mojo.license.ext.LicenseFactory;
-import org.codehaus.mojo.license.model.ProjectLicenseInfo;
 import org.codehaus.mojo.license.osgi.AboutFileLicenseResolver;
+import org.codehaus.plexus.component.annotations.Requirement;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 /**
@@ -61,53 +87,51 @@ public class DownloadOsgiLicensesMojo
     @Parameter( property = "license.exludedGroups" )
     private String excludedGroups;
 
+    /**
+     * Location of the local repository.
+     *
+     * @since 1.0
+     */
+    @Parameter( defaultValue = "${localRepository}", readonly = true )
+    protected ArtifactRepository localRepository;
+
     @Component
     private ArtifactResolver artifactResovler;
 
     @Component
     private ArtifactFactory artifactFactory;
 
+    @Requirement
+    private MavenSession mavenSession;
+
     @Component
     private AboutFileLicenseResolver aboutFileLicenseResolver;
 
     @Override
-    public String getExcludedArtifacts()
+    protected ProjectLicenseInfo createDependencyProject( LicensedArtifact licensedArtifact )
+        throws MojoFailureException
     {
-        return excludedArtifacts;
-    }
-
-    @Override
-    public String getExcludedGroups()
-    {
-        return excludedGroups;
-    }
-
-    @Override
-    protected ProjectLicenseInfo createDependencyProject( MavenProject depMavenProject )
-    {
-        ProjectLicenseInfo dependencyProject = super.createDependencyProject( depMavenProject );
+        ProjectLicenseInfo dependencyProject = super.createDependencyProject( licensedArtifact );
         if ( dependencyProject.getLicenses().isEmpty() )
         {
-            readLicensesFromProject( dependencyProject.getLicenses(), depMavenProject );
+            readLicensesFromProject( dependencyProject.getLicenses(), licensedArtifact );
         }
         return dependencyProject;
     }
 
-    private void readLicensesFromProject( List<License> licenses, MavenProject depMavenProject )
+    private void readLicensesFromProject( List<ProjectLicense> licenses, LicensedArtifact licensedArtifact )
     {
-        Artifact artifact = resolveArtifact( depMavenProject );
+        Artifact artifact = resolveArtifact( licensedArtifact );
         readLicensesFromArtifact( licenses, artifact );
     }
 
-    private Artifact resolveArtifact( MavenProject project )
+    private Artifact resolveArtifact( LicensedArtifact licensedArtifact )
     {
-        Artifact artifact = project.getArtifact();
-        String key = ArtifactUtils.versionlessKey( artifact );
-        artifact = (Artifact) this.project.getArtifactMap().get( key );
-        return artifact;
+        String key = String.join( ":", licensedArtifact.getGroupId(), licensedArtifact.getArtifactId() );
+        return this.project.getArtifactMap().get( key );
     }
 
-    private void readLicensesFromArtifact( List<License> licenses, Artifact artifact )
+    private void readLicensesFromArtifact( List<ProjectLicense> licenses, Artifact artifact )
     {
         File artifactFile = artifact.getFile();
         if ( artifactFile == null )
@@ -142,7 +166,7 @@ public class DownloadOsgiLicensesMojo
         }
     }
 
-    private void readLicensesFromManifest( List<License> licenses, Artifact artifact, JarFile jarFile )
+    private void readLicensesFromManifest( List<ProjectLicense> licenses, Artifact artifact, JarFile jarFile )
         throws IOException
     {
         Manifest manifest = jarFile.getManifest();
@@ -168,14 +192,16 @@ public class DownloadOsgiLicensesMojo
         }
     }
 
-    private void readLicensesFromEmbeddedPoms( final List<License> licenses, final JarFile jarFile )
+    private void readLicensesFromEmbeddedPoms( final List<ProjectLicense> licenses, final JarFile jarFile )
     {
         jarFile.stream().filter( new Predicate<JarEntry>() {
+            @Override
             public boolean test( JarEntry entry )
             {
                 return entry.getName().matches( "^META-INF/maven/.*/pom\\.xml$" );
             }
         } ).forEach( new Consumer<JarEntry>() {
+            @Override
             public void accept( JarEntry pomEntry )
             {
                 readLicensesFromPom( licenses, jarFile, pomEntry );
@@ -183,7 +209,7 @@ public class DownloadOsgiLicensesMojo
         } );
     }
 
-    private void readLicensesFromPom( List<License> licenses, JarFile jarFile, JarEntry pomEntry )
+    private void readLicensesFromPom( List<ProjectLicense> licenses, JarFile jarFile, JarEntry pomEntry )
     {
         getLog().debug( "Found embedded pom: " + pomEntry );
         try
@@ -191,7 +217,7 @@ public class DownloadOsgiLicensesMojo
             InputStream is = jarFile.getInputStream( pomEntry );
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model model = reader.read( new InputStreamReader( is ) );
-            while (model.getLicenses().isEmpty())
+            while ( model.getLicenses().isEmpty() )
             {
                 Parent p = model.getParent();
                 if ( p == null )
@@ -202,7 +228,7 @@ public class DownloadOsgiLicensesMojo
             }
             for ( Object license : model.getLicenses() )
             {
-                licenses.add( (License) license );
+                licenses.add( (ProjectLicense) license );
             }
         }
         catch ( IOException e )
@@ -232,18 +258,18 @@ public class DownloadOsgiLicensesMojo
         return new MavenXpp3Reader().read( new FileReader( parentArtifact.getFile() ) );
     }
 
-    void readLicensesFromAboutFile( List<License> licenses, Artifact artifact, File jarFile )
+    void readLicensesFromAboutFile( List<ProjectLicense> licenses, Artifact artifact, File jarFile )
         throws IOException
     {
         for ( License license : aboutFileLicenseResolver.resolve( artifact.getArtifactId(), jarFile ) )
         {
-            licenses.add( license );
+            licenses.add( new ProjectLicense( license ) );
         }
     }
 
-    private void addLicense( List<License> licenses, Artifact artifact, String licenseUrl )
+    private void addLicense( List<ProjectLicense> licenses, Artifact artifact, String licenseUrl )
     {
-        licenses.add( LicenseFactory.create( artifact.getArtifactId(), licenseUrl ) );
+        licenses.add( new ProjectLicense( LicenseFactory.create( artifact.getArtifactId(), licenseUrl ) ) );
     }
 
 }

@@ -7,21 +7,22 @@ package org.codehaus.mojo.license.utils;
  * Copyright (C) 2010 - 2011 Codehaus
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
  */
 
+import org.apache.commons.codec.binary.Hex;
 import org.codehaus.plexus.util.FileUtils;
 import org.codehaus.plexus.util.IOUtil;
 
@@ -36,17 +37,24 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Some basic file io utilities
  *
  * @author pgier
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public class FileUtil
@@ -154,16 +162,22 @@ public class FileUtil
     public static void renameFile( File file, File destination )
         throws IOException
     {
-        try {
-            try {
+        try
+        {
+            try
+            {
                 org.apache.commons.io.FileUtils.forceDelete( destination );
-            } catch (FileNotFoundException ex) {
+            }
+            catch ( FileNotFoundException ex )
+            {
                 //Just do nothing
             }
 
             org.apache.commons.io.FileUtils.moveFile( file, destination );
-        } catch (IOException ex) {
-            throw new IOException(String.format( "could not rename '%s' to '%s'", file, destination ));
+        }
+        catch ( IOException ex )
+        {
+            throw new IOException( String.format( "could not rename '%s' to '%s'", file, destination ) );
         }
     }
 
@@ -239,32 +253,40 @@ public class FileUtil
     }
 
     /**
-     * Sauvegarde un contenu dans un fichier.
+     * Print content to file. This method ensures that a platform specific line ending is used.
      *
-     * @param file     le fichier a ecrire
-     * @param content  le contenu du fichier
-     * @param encoding l'encoding d'ecriture
+     * @param file     the file to write to
+     * @param content  the content to write
+     * @param encoding the encoding to write in
      * @throws IOException if IO pb
      */
-    public static void writeString( File file, String content, String encoding )
+    public static void printString( File file, String content, String encoding )
         throws IOException
     {
         createDirectoryIfNecessary( file.getParentFile() );
-        BufferedWriter out;
-        out = new BufferedWriter( new OutputStreamWriter( new FileOutputStream( file ), encoding ) );
+
+        BufferedReader in;
+        PrintWriter out;
+        in =  new BufferedReader( new StringReader( content ) );
+        out = new PrintWriter( new BufferedWriter( new OutputStreamWriter( new FileOutputStream( file ), encoding ) ) );
         try
         {
-            IOUtil.copy( content, out );
+            String line;
+            while ( ( line = in.readLine() ) != null )
+            {
+                out.println( line );
+            }
         }
         finally
         {
+            in.close();
             out.close();
         }
     }
 
     public static List<File> orderFiles( Collection<File> files )
     {
-        List<File> result = new ArrayList<File>( files );
+        List<File> result = new ArrayList<>( files );
         Collections.sort( result, new Comparator<File>()
         {
             public int compare( File o1, File o2 )
@@ -273,5 +295,57 @@ public class FileUtil
             }
         } );
         return result;
+    }
+
+    public static String sha1( Path in ) throws IOException
+    {
+        try
+        {
+            final MessageDigest md = MessageDigest.getInstance( "SHA-1" );
+            return Hex.encodeHexString( md.digest( Files.readAllBytes( in ) ) );
+        }
+        catch ( NoSuchAlgorithmException e )
+        {
+            throw new RuntimeException( e );
+        }
+    }
+
+    public static String toExtension( String mimeType, boolean throwDefault )
+    {
+        if ( mimeType == null )
+        {
+            if ( throwDefault )
+            {
+                throw new IllegalStateException( "Unexpected null mime type" );
+            }
+            else
+            {
+                return null;
+            }
+        }
+        final String lowerMimeType = mimeType.toLowerCase( Locale.ROOT );
+        if ( lowerMimeType.contains( "plain" ) || "text/x-c".equals( lowerMimeType ) )
+        {
+            return ".txt";
+        }
+
+        if ( lowerMimeType.contains( "html" ) )
+        {
+            return ".html";
+        }
+
+        if ( lowerMimeType.contains( "pdf" ) )
+        {
+            return ".pdf";
+        }
+
+        if ( throwDefault )
+        {
+            throw new IllegalStateException( "Unexpected mime type '" + mimeType + "'" );
+        }
+        else
+        {
+            return null;
+        }
     }
 }

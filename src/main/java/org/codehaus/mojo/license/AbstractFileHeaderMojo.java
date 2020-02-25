@@ -29,9 +29,7 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.codehaus.mojo.license.api.FreeMarkerHelper;
 import org.codehaus.mojo.license.header.FileHeader;
-import org.codehaus.mojo.license.header.FileHeaderFilter;
 import org.codehaus.mojo.license.header.FileHeaderProcessor;
-import org.codehaus.mojo.license.header.FileHeaderProcessorConfiguration;
 import org.codehaus.mojo.license.header.InvalideFileHeaderException;
 import org.codehaus.mojo.license.header.UpdateFileHeaderFilter;
 import org.codehaus.mojo.license.header.transformer.FileHeaderTransformer;
@@ -40,14 +38,13 @@ import org.codehaus.mojo.license.model.Copyright;
 import org.codehaus.mojo.license.model.License;
 import org.codehaus.mojo.license.utils.FileUtil;
 import org.codehaus.mojo.license.utils.MojoHelper;
-import org.codehaus.plexus.util.DirectoryScanner;
-import org.codehaus.plexus.util.FileUtils;
-import org.nuiton.processor.Processor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -59,29 +56,13 @@ import java.util.TreeMap;
 
 /**
  * Abstract mojo for file-header operations (check, update, report,...).
- * <p/>
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.2
  */
-public abstract class AbstractFileHeaderMojo
-    extends AbstractLicenseNameMojo
-    implements FileHeaderProcessorConfiguration
+public abstract class AbstractFileHeaderMojo extends AbstractLicenseNameMojo
 {
-
-    // ----------------------------------------------------------------------
-    // Constants
-    // ----------------------------------------------------------------------
-
-    public static final String[] DEFAULT_INCLUDES = new String[]{ "**/*" };
-
-    public static final String[] DEFAULT_EXCLUDES =
-        new String[]{ "**/*.zargo", "**/*.uml", "**/*.umldi", "**/*.xmi", /* modelisation */
-            "**/*.img", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", /* images */
-            "**/*.zip", "**/*.jar", "**/*.war", "**/*.ear", "**/*.tgz", "**/*.gz" };
-
-    public static final String[] DEFAULT_ROOTS =
-        new String[]{ "src", "target/generated-sources", "target/processed-sources" };
+    private static final Logger LOG = LoggerFactory.getLogger( AbstractFileHeaderMojo.class );
 
     // ----------------------------------------------------------------------
     // Mojo Parameters
@@ -89,118 +70,151 @@ public abstract class AbstractFileHeaderMojo
 
     /**
      * To overwrite the processStartTag used to build header model.
-     * <p/>
-     * See http://mojo.codehaus.org/license-maven-plugin/header.html#Configuration .
+     * <p>
+     * See <a href="http://mojohaus.org/license-maven-plugin/header.html#Configuration">File header configuration</a>.
      *
      * @since 1.1
      */
     @Parameter( property = "license.processStartTag" )
-    protected String processStartTag;
+    private String processStartTag;
 
     /**
      * To overwrite the processEndTag used to build header model.
-     * <p/>
-     * See http://mojo.codehaus.org/license-maven-plugin/header.html#Configuration .
+     * <p>
+     * See <a href="http://mojohaus.org/license-maven-plugin/header.html#Configuration">File header configuration</a>.
      *
      * @since 1.1
      */
     @Parameter( property = "license.processEndTag" )
-    protected String processEndTag;
+    private String processEndTag;
 
     /**
      * To overwrite the sectionDelimiter used to build header model.
-     * <p/>
-     * See http://mojo.codehaus.org/license-maven-plugin/header.html#Configuration .
+     * <p>
+     * See <a href="http://mojohaus.org/license-maven-plugin/header.html#Configuration">File header configuration</a>.
      *
      * @since 1.1
      */
     @Parameter( property = "license.sectionDelimiter" )
-    protected String sectionDelimiter;
+    private String sectionDelimiter;
+
+    /**
+     * To specify a line separator to use.
+     *
+     * If not set, will use system property {@code line.separator}.
+     */
+    @Parameter( property = "license.lineSeparator" )
+    private String lineSeparator;
 
     /**
      * A flag to add svn:keywords on new header.
-     * <p/>
+     * <p>
      * Will add svn keywords :
      * <pre>Id, HeadURL</pre>
-     * <p/>
+     *
      * <strong>Note:</strong> This parameter is used by the {@link #descriptionTemplate}, so if you change this
      * template, the parameter could be no more used (depends what you put in your own template...).
      *
      * @since 1.0
      */
     @Parameter( property = "license.addSvnKeyWords", defaultValue = "false" )
-    protected boolean addSvnKeyWords;
+    private boolean addSvnKeyWords;
 
     /**
      * A flag to authorize update of the description part of the header.
-     * <p/>
+     * <p>
      * <b>Note:</b> By default, do NOT authorize it since description can change
      * on each file).
      *
      * @since 1.0
      */
     @Parameter( property = "license.canUpdateDescription", defaultValue = "false" )
-    protected boolean canUpdateDescription;
+    private boolean canUpdateDescription;
 
     /**
      * A flag to authorize update of the copyright part of the header.
-     * <p/>
+     * <p>
      * <b>Note:</b> By default, do NOT authorize it since copyright part should be
      * handled by developpers (holder can change on each file for example).
      *
      * @since 1.0
      */
     @Parameter( property = "license.canUpdateCopyright", defaultValue = "false" )
-    protected boolean canUpdateCopyright;
+    private boolean canUpdateCopyright;
 
     /**
      * A flag to authorize update of the license part of the header.
-     * <p/>
+     * <p>
      * <b>Note:</b> By default, authorize it since license part should always be
      * generated by the plugin.
      *
      * @since 1.0
      */
     @Parameter( property = "license.canUpdateLicense", defaultValue = "true" )
-    protected boolean canUpdateLicense;
+    private boolean canUpdateLicense;
 
     /**
      * A tag to place on files that will be ignored by the plugin.
-     * <p/>
+     * <p>
      * Sometimes, it is necessary to do this when file is under a specific license.
-     * <p/>
+     * <p>
      * <b>Note:</b> If no sets, will use the default tag {@code %% Ignore-License}
      *
      * @since 1.0
      */
     @Parameter( property = "license.ignoreTag" )
-    protected String ignoreTag;
-
-    /**
-     * A flag to clear everything after execution.
-     * <p/>
-     * <b>Note:</b> This property should ONLY be used for test purpose.
-     *
-     * @since 1.0
-     */
-    @Parameter( property = "license.clearAfterOperation", defaultValue = "true" )
-    protected boolean clearAfterOperation;
+    private String ignoreTag;
 
     /**
      * A flag to add the license header in java files after the package statement.
-     * <p/>
+     * <p>
      * This is a practice used by many people (apache, codehaus, ...).
-     * <p/>
+     * <p>
      * <b>Note:</b> By default this property is then to {@code true} since it is a good practice.
      *
      * @since 1.2
      */
     @Parameter( property = "license.addJavaLicenseAfterPackage", defaultValue = "true" )
-    protected boolean addJavaLicenseAfterPackage;
+    private boolean addJavaLicenseAfterPackage;
+
+    /**
+     * A flag to use for java comment start tag with no reformat syntax {@code /*-}.
+     * <p>
+     * See http://www.oracle.com/technetwork/java/javase/documentation/codeconventions-141999.html#350
+     *
+     * @since 1.9
+     */
+    @Parameter( property = "license.useJavaNoReformatCommentStartTag", defaultValue = "true" )
+    private boolean useJavaNoReformatCommentStartTag;
+
+    /**
+     * A flag to indicate if there should be an empty line after the header.
+     * <p>
+     * Checkstyle requires empty line between license header and package statement.
+     * If you are using addJavaLicenseAfterPackage=false it could make sense to set this to true.
+     * </p>
+     * <b>Note:</b> By default this property is set to {@code false} to keep old behavior.
+     *
+     * @since 1.9
+     */
+    @Parameter( property = "license.emptyLineAfterHeader", defaultValue = "false" )
+    private boolean emptyLineAfterHeader;
+
+    /**
+     * A flag to indicate if there should be an empty line after the header.
+     * <p>
+     * Checkstyle usually requires no trailing whitespace.
+     * If it is the case it could make sense to set this to true
+     * </p>
+     * <b>Note:</b> By default this property is set to {@code false} to keep old behavior.
+     *
+     * @since 1.14
+     */
+    @Parameter( property = "license.trimHeaderLine", defaultValue = "false" )
+    private boolean trimHeaderLine;
 
     /**
      * A flag to ignore no files to scan.
-     *
      * <p>
      * This flag will suppress the "No file to scan" warning. This will allow you to set the plug-in in the root pom of
      * your project without getting a lot of warnings for aggregation modules / artifacts.
@@ -210,56 +224,54 @@ public abstract class AbstractFileHeaderMojo
      * @since 1.9
      */
     @Parameter( property = "license.ignoreNoFileToScan", defaultValue = "false" )
-    protected boolean ignoreNoFileToScan;
+    private boolean ignoreNoFileToScan;
 
     /**
      * To specify the base dir from which we apply the license.
-     * <p/>
+     * <p>
      * Should be on form "root1,root2,rootn".
-     * <p/>
+     * <p>
      * By default, the main roots are "src, target/generated-sources, target/processed-sources".
-     * <p/>
+     * <p>
      * <b>Note:</b> If some of these roots do not exist, they will be simply
      * ignored.
-     * <p/>
+     * <p>
      * <b>Note:</b> This parameter is not useable if you are still using a project file descriptor.
      *
      * @since 1.0
      */
     @Parameter( property = "license.roots" )
-    protected String[] roots;
+    private String[] roots;
 
     /**
      * Specific files to includes, separated by a comma. By default, it is "** /*".
-     * <p/>
+     * <p>
      * <b>Note:</b> This parameter is not usable if you are still using a project file descriptor.
      *
      * @since 1.0
      */
     @Parameter( property = "license.includes" )
-    protected String[] includes;
+    private String[] includes;
 
     /**
      * Specific files to excludes, separated by a comma.
-     * By default, thoses file type are excluded:
+     * By default, those file types are excluded:
      * <ul>
      * <li>modelisation</li>
      * <li>images</li>
      * </ul>
-     * <p/>
-     * <b>Note:</b> This parameter is not useable if you are still using a project file descriptor.
      *
      * @since 1.0
      */
     @Parameter( property = "license.excludes" )
-    protected String[] excludes;
+    private String[] excludes;
 
     /**
      * To associate extra extension files to an existing comment style.
-     * <p/>
+     * <p>
      * Keys of the map are the extension of extra files to treat, and the value
      * is the comment style you want to associate.
-     * <p/>
+     * <p>
      * For example, to treat file with extensions {@code java2} and {@code jdata}
      * as {@code java} files (says using the {@code java} comment style, declare this
      * in your plugin configuration :
@@ -269,43 +281,45 @@ public abstract class AbstractFileHeaderMojo
      * &lt;jdata&gt;java&lt;/jdata&gt;
      * &lt;/extraExtensions&gt;
      * </pre>
-     * <p/>
-     * <b>Note:</b> This parameter is not useable if you are still using a project file descriptor.
      *
-     * @parameter
      * @since 1.0
      */
     @Parameter
-    protected Map<String, String> extraExtensions;
+    private Map<String, String> extraExtensions;
+
+    /**
+     * To associate extra files to an existing comment style.
+     * <p>
+     * Keys of the map are the name of extra files to treat, and the value
+     * is the comment style you want to associate.
+     * <p>
+     * For example, to treat a file named {@code DockerFile} as {@code properties} files
+     * (says using the {@code properties} comment style, declare this in your plugin configuration :
+     * <pre>
+     * &lt;extraFiles&gt;
+     * &lt;DockerFile&gt;properties&lt;/DockerFile&gt;
+     * &lt;/extraFiles&gt;
+     * </pre>
+     *
+     * @since 1.11
+     */
+    @Parameter
+    private Map<String, String> extraFiles;
 
     /**
      * Template used to build the description section of the license header.
-     * <p/>
+     * <p>
      * (This template use freemarker).
      *
      * @since 1.1
      */
     @Parameter( property = "license.descriptionTemplate",
-                defaultValue = "/org/codehaus/mojo/license/default-file-header-description.ftl" )
-    protected String descriptionTemplate;
+            defaultValue = "/org/codehaus/mojo/license/default-file-header-description.ftl" )
+    private String descriptionTemplate;
 
     // ----------------------------------------------------------------------
     // Plexus components
     // ----------------------------------------------------------------------
-
-    /**
-     * @since 1.0
-     */
-    @Component( role = Processor.class, hint = "file-header" )
-    private FileHeaderProcessor processor;
-
-    /**
-     * The processor filter used to change header content.
-     *
-     * @since 1.0
-     */
-    @Component( role = FileHeaderFilter.class, hint = "update-file-header" )
-    private UpdateFileHeaderFilter filter;
 
     /**
      * All available header transformers.
@@ -318,16 +332,6 @@ public abstract class AbstractFileHeaderMojo
     // ----------------------------------------------------------------------
     // Private fields
     // ----------------------------------------------------------------------
-
-    /**
-     * internal file header transformer.
-     */
-    private FileHeaderTransformer transformer;
-
-    /**
-     * internal default file header.
-     */
-    private FileHeader header;
 
     /**
      * timestamp used for generation.
@@ -356,12 +360,12 @@ public abstract class AbstractFileHeaderMojo
     /**
      * Dictionary of treated files indexed by their state.
      */
-    private EnumMap<FileState, Set<File>> result;
+    EnumMap<FileState, Set<File>> result;
 
     /**
      * Dictionary of files to treat indexed by their CommentStyle.
      */
-    private Map<String, List<File>> filesToTreateByCommentStyle;
+    private Map<String, List<File>> filesToTreatByCommentStyle;
 
     /**
      * Freemarker helper component.
@@ -375,19 +379,21 @@ public abstract class AbstractFileHeaderMojo
     // ----------------------------------------------------------------------
 
     /**
-     * @return {@code true} if mojo must be a simple dry run (says do not modifiy any scanned files),
-     * {@code false} otherise.
+     * @return {@code true} if mojo must be a simple dry run (says do not modifiy any scanned files), {@code false}
+     *      otherise.
      */
     protected abstract boolean isDryRun();
 
     /**
-     * @return {@code true} if mojo should fails if dryRun and there is some missing license header, {@code false} otherwise.
+     * @return {@code true} if mojo should fails if dryRun and there is some missing license header, {@code false}
+     *      otherwise.
      */
     protected abstract boolean isFailOnMissingHeader();
 
 
     /**
-     * @return {@code true} if mojo should fails if dryRun and there is some obsolete license header, {@code false} otherwise.
+     * @return {@code true} if mojo should fails if dryRun and there is some obsolete license header, {@code false}
+     *      otherwise.
      */
     protected abstract boolean isFailOnNotUptodateHeader();
 
@@ -395,73 +401,50 @@ public abstract class AbstractFileHeaderMojo
     // AbstractLicenseMojo Implementaton
     // ----------------------------------------------------------------------
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public void init()
-        throws Exception
+    public void init() throws Exception
     {
-
         if ( StringUtils.isEmpty( ignoreTag ) )
         {
-
             // use default value
             this.ignoreTag = "%" + "%Ignore-License";
         }
-
         if ( !isDryRun() )
         {
-
             if ( isFailOnMissingHeader() )
             {
-
-                getLog().warn( "The failOnMissingHeader has no effect if the property dryRun is not setted." );
+                LOG.warn( "The failOnMissingHeader has no effect if the property dryRun is not set." );
             }
 
             if ( isFailOnNotUptodateHeader() )
             {
-
-                getLog().warn( "The failOnNotUptodateHeader has no effect if the property dryRun is not setted." );
+                LOG.warn( "The failOnNotUptodateHeader has no effect if the property dryRun is not set." );
             }
         }
 
         if ( isVerbose() )
         {
-
-            // print availables comment styles (transformers)
+            // print available comment styles (transformers)
             StringBuilder buffer = new StringBuilder();
             buffer.append( "config - available comment styles :" );
             String commentFormat = "\n  * %1$s (%2$s)";
             for ( String transformerName : transformers.keySet() )
             {
-                FileHeaderTransformer aTransformer = getTransformer( transformerName );
+                FileHeaderTransformer aTransformer = getTransformer( transformers, transformerName );
                 String str = String.format( commentFormat, aTransformer.getName(), aTransformer.getDescription() );
                 buffer.append( str );
             }
-            getLog().info( buffer.toString() );
+            LOG.info( "{}", buffer );
         }
-
         // set timestamp used for temporary files
         this.timestamp = System.nanoTime();
-
-        // add flags to authorize or not updates of header
-        filter.setUpdateCopyright( canUpdateCopyright );
-        filter.setUpdateDescription( canUpdateDescription );
-        filter.setUpdateLicense( canUpdateLicense );
-
-        filter.setLog( getLog() );
-        processor.setConfiguration( this );
-        processor.setFilter( filter );
-
         super.init();
-
         if ( roots == null || roots.length == 0 )
         {
             roots = DEFAULT_ROOTS;
             if ( isVerbose() )
             {
-                getLog().info( "Will use default roots " + Arrays.toString( roots ) );
+                LOG.info( "Will use default roots {}", ( Object ) roots );
             }
         }
 
@@ -470,7 +453,7 @@ public abstract class AbstractFileHeaderMojo
             includes = DEFAULT_INCLUDES;
             if ( isVerbose() )
             {
-                getLog().info( "Will use default includes " + Arrays.toString( includes ) );
+                LOG.info( "Will use default includes {}", ( Object ) includes );
             }
         }
 
@@ -479,28 +462,27 @@ public abstract class AbstractFileHeaderMojo
             excludes = DEFAULT_EXCLUDES;
             if ( isVerbose() )
             {
-                getLog().info( "Will use default excludes" + Arrays.toString( excludes ) );
+                LOG.info( "Will use default excludes {}", ( Object ) excludes );
             }
         }
 
-        extensionToCommentStyle = new TreeMap<String, String>();
+        extensionToCommentStyle = new TreeMap<>();
 
         processStartTag = cleanHeaderConfiguration( processStartTag, FileHeaderTransformer.DEFAULT_PROCESS_START_TAG );
         if ( isVerbose() )
         {
-            getLog().info( "Will use processStartTag: " + processEndTag );
+            LOG.info( "Will use processStartTag: {}", processStartTag );
         }
         processEndTag = cleanHeaderConfiguration( processEndTag, FileHeaderTransformer.DEFAULT_PROCESS_END_TAG );
         if ( isVerbose() )
         {
-            getLog().info( "Will use processEndTag: " + processEndTag );
+            LOG.info( "Will use processEndTag: {}", processEndTag );
         }
-        sectionDelimiter =
-            cleanHeaderConfiguration( sectionDelimiter, FileHeaderTransformer.DEFAULT_SECTION_DELIMITER );
-
+        sectionDelimiter = cleanHeaderConfiguration( sectionDelimiter,
+                FileHeaderTransformer.DEFAULT_SECTION_DELIMITER );
         if ( isVerbose() )
         {
-            getLog().info( "Will use sectionDelimiter: " + sectionDelimiter );
+            LOG.info( "Will use sectionDelimiter: {}", sectionDelimiter );
         }
 
         // add default extensions from header transformers
@@ -512,11 +494,16 @@ public abstract class AbstractFileHeaderMojo
             aTransformer.setProcessStartTag( processStartTag );
             aTransformer.setProcessEndTag( processEndTag );
             aTransformer.setSectionDelimiter( sectionDelimiter );
+            aTransformer.setEmptyLineAfterHeader( emptyLineAfterHeader );
+            aTransformer.setTrimHeaderLine( trimHeaderLine );
+            aTransformer.setLineSeparator( lineSeparator );
 
             if ( aTransformer instanceof JavaFileHeaderTransformer )
             {
-                ( (JavaFileHeaderTransformer) aTransformer ).setAddJavaLicenseAfterPackage(
-                    addJavaLicenseAfterPackage );
+                JavaFileHeaderTransformer javaFileHeaderTransformer = (JavaFileHeaderTransformer) aTransformer;
+
+                javaFileHeaderTransformer.setAddJavaLicenseAfterPackage( addJavaLicenseAfterPackage );
+                javaFileHeaderTransformer.setUseNoReformatCommentStartTag( useJavaNoReformatCommentStartTag );
             }
 
             String[] extensions = aTransformer.getDefaultAcceptedExtensions();
@@ -524,7 +511,7 @@ public abstract class AbstractFileHeaderMojo
             {
                 if ( isVerbose() )
                 {
-                    getLog().info( "Associate extension " + extension + " to comment style " + commentStyle );
+                    LOG.info( "Associate extension '{}' to comment style '{}'", extension, commentStyle );
                 }
                 extensionToCommentStyle.put( extension, commentStyle );
             }
@@ -532,61 +519,54 @@ public abstract class AbstractFileHeaderMojo
 
         if ( extraExtensions != null )
         {
-
             // fill extra extensions for each transformer
             for ( Map.Entry<String, String> entry : extraExtensions.entrySet() )
             {
                 String extension = entry.getKey();
                 if ( extensionToCommentStyle.containsKey( extension ) )
                 {
-
                     // override existing extension mapping
-                    getLog().warn( "The extension " + extension + " is already accepted for comment style " +
-                                       extensionToCommentStyle.get( extension ) );
+                    LOG.warn( "The extension '{}' is already accepted for comment style '{}'",
+                            extension, extensionToCommentStyle.get( extension ) );
                 }
                 String commentStyle = entry.getValue();
-
                 // check transformer exists
-                getTransformer( commentStyle );
-
+                getTransformer( transformers, commentStyle );
                 if ( isVerbose() )
                 {
-                    getLog().info( "Associate extension '" + extension + "' to comment style '" + commentStyle + "'" );
+                    LOG.info( "Associate extension '{}' to comment style '{}'", extension, commentStyle );
                 }
                 extensionToCommentStyle.put( extension, commentStyle );
             }
         }
-
+        if ( extraFiles == null )
+        {
+            extraFiles = Collections.emptyMap();
+        }
         // get all files to treat indexed by their comment style
-        filesToTreateByCommentStyle = obtainFilesToProcessByCommentStyle();
-
+        filesToTreatByCommentStyle = obtainFilesToProcessByCommentStyle( extraFiles, roots, includes, excludes,
+                extensionToCommentStyle, transformers );
         // build the description template
         if ( isVerbose() )
         {
-            getLog().info( "Use description template : " + descriptionTemplate );
+            LOG.info( "Use description template: {}", descriptionTemplate );
         }
         descriptionTemplate0 = freeMarkerHelper.getTemplate( descriptionTemplate );
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public void doAction()
-        throws Exception
+    public void doAction() throws Exception
     {
 
         long t0 = System.nanoTime();
 
-        clear();
-
-        processedFiles = new HashSet<File>();
-        result = new EnumMap<FileState, Set<File>>( FileState.class );
+        processedFiles = new HashSet<>();
+        result = new EnumMap<>( FileState.class );
 
         try
         {
 
-            for ( Map.Entry<String, List<File>> commentStyleFiles : filesToTreateByCommentStyle.entrySet() )
+            for ( Map.Entry<String, List<File>> commentStyleFiles : filesToTreatByCommentStyle.entrySet() )
             {
 
                 String commentStyle = commentStyleFiles.getKey();
@@ -603,20 +583,20 @@ public abstract class AbstractFileHeaderMojo
             int nbFiles = processedFiles.size();
             if ( nbFiles == 0 && !ignoreNoFileToScan )
             {
-                getLog().warn( "No file to scan." );
+                LOG.warn( "No file to scan." );
             }
             else
             {
                 String delay = MojoHelper.convertTime( System.nanoTime() - t0 );
                 String message =
-                    String.format( "Scan %s file%s header done in %s.", nbFiles, nbFiles > 1 ? "s" : "", delay );
-                getLog().info( message );
+                        String.format( "Scan %s file%s header done in %s.", nbFiles, nbFiles > 1 ? "s" : "", delay );
+                LOG.info( message );
             }
             Set<FileState> states = result.keySet();
             if ( states.size() == 1 && states.contains( FileState.uptodate ) )
             {
                 // all files where up to date
-                getLog().info( "All files are up-to-date." );
+                LOG.info( "All files are up-to-date." );
             }
             else
             {
@@ -625,118 +605,18 @@ public abstract class AbstractFileHeaderMojo
                 for ( FileState state : FileState.values() )
                 {
 
-                    reportType( state, buffer );
+                    reportType( result, state, buffer );
                 }
 
-                getLog().info( buffer.toString() );
+                LOG.info( buffer.toString() );
             }
 
-            // clean internal states
-            if ( clearAfterOperation )
-            {
-                clear();
-            }
         }
     }
 
     // ----------------------------------------------------------------------
-    // FileHeaderProcessorConfiguration Implementaton
+    // Private Methods
     // ----------------------------------------------------------------------
-
-    /**
-     * {@inheritDoc}
-     */
-    public FileHeader getFileHeader()
-    {
-        return header;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public FileHeaderTransformer getTransformer()
-    {
-        return transformer;
-    }
-
-    // ----------------------------------------------------------------------
-    // Protected Methods
-    // ----------------------------------------------------------------------
-
-    /**
-     * Gets all files to process indexed by their comment style.
-     *
-     * @return for each comment style, list of files to process
-     */
-    protected Map<String, List<File>> obtainFilesToProcessByCommentStyle()
-    {
-
-        Map<String, List<File>> results = new HashMap<String, List<File>>();
-
-        // add for all known comment style (says transformer) a empty list
-        // this permits not to have to test if there is an already list each time
-        // we wants to add a new file...
-        for ( String commentStyle : transformers.keySet() )
-        {
-            results.put( commentStyle, new ArrayList<File>() );
-        }
-
-        List<String> rootsList = new ArrayList<String>( roots.length );
-        for ( String root : roots )
-        {
-            File f = new File( root );
-            if ( f.isAbsolute() )
-            {
-                rootsList.add( f.getAbsolutePath() );
-            }
-            else
-            {
-                f = new File( getProject().getBasedir(), root );
-            }
-            if ( f.exists() )
-            {
-                getLog().info( "Will search files to update from root " + f );
-                rootsList.add( f.getAbsolutePath() );
-            }
-            else
-            {
-                if ( isVerbose() )
-                {
-                    getLog().info( "Skip not found root " + f );
-                }
-            }
-        }
-
-        // Obtain all files to treat
-        Map<File, String[]> allFiles = new HashMap<File, String[]>();
-        getFilesToTreateForRoots( includes, excludes, rootsList, allFiles );
-
-        // filter all these files according to their extension
-
-        for ( Map.Entry<File, String[]> entry : allFiles.entrySet() )
-        {
-            File root = entry.getKey();
-            String[] filesPath = entry.getValue();
-
-            // sort them by the associated comment style to their extension
-            for ( String path : filesPath )
-            {
-                String extension = FileUtils.extension( path );
-                String commentStyle = extensionToCommentStyle.get( extension );
-                if ( StringUtils.isEmpty( commentStyle ) )
-                {
-
-                    // unknown extension, do not treat this file
-                    continue;
-                }
-                //
-                File file = new File( root, path );
-                List<File> files = results.get( commentStyle );
-                files.add( file );
-            }
-        }
-        return results;
-    }
 
     /**
      * Checks the results of the mojo execution using the {@link #isFailOnMissingHeader()} and
@@ -745,8 +625,7 @@ public abstract class AbstractFileHeaderMojo
      * @param result processed files by their status
      * @throws MojoFailureException if check is not ok (some file with no header or to update)
      */
-    protected void checkResults( EnumMap<FileState, Set<File>> result )
-        throws MojoFailureException
+    private void checkResults( EnumMap<FileState, Set<File>> result ) throws MojoFailureException
     {
         Set<FileState> states = result.keySet();
 
@@ -781,14 +660,13 @@ public abstract class AbstractFileHeaderMojo
     }
 
     /**
-     * Process a given comment styl to all his detected files.
+     * Process a given comment style to all his detected files.
      *
      * @param commentStyle comment style to treat
      * @param filesToTreat files using this comment style to treat
      * @throws IOException if any IO error while processing files
      */
-    protected void processCommentStyle( String commentStyle, List<File> filesToTreat )
-        throws IOException
+    private void processCommentStyle( String commentStyle, List<File> filesToTreat ) throws IOException
     {
 
         // obtain license from definition
@@ -796,39 +674,65 @@ public abstract class AbstractFileHeaderMojo
 
         if ( isVerbose() )
         {
-            getLog().info( "Process header '" + commentStyle + "'" );
-            getLog().info( " - using " + license.getDescription() );
+            LOG.info( "Process header '{}'", commentStyle );
+            LOG.info( " - using {}", license.getDescription() );
         }
 
         // use header transformer according to comment style given in header
-        this.transformer = getTransformer( commentStyle );
+        FileHeaderTransformer transformer = getTransformer( transformers, commentStyle );
+        FileHeaderProcessor processor = getFileHeaderProcessor( license, transformer );
 
-        // file header to use if no header is found on a file
-        this.header = buildDefaultFileHeader( license, getEncoding() );
-
-        // update processor filter
-        processor.populateFilter();
 
         for ( File file : filesToTreat )
         {
-            processFile( file );
+            processFile( processor, file );
         }
         filesToTreat.clear();
+    }
+
+    private FileHeaderProcessor getFileHeaderProcessor( License license, FileHeaderTransformer transformer )
+            throws IOException
+    {
+        // file header to use if no header is found on a file
+        FileHeader header = new FileHeader();
+
+        if ( inceptionYear == null )
+        {
+            LOG.warn( "No inceptionYear defined (will use current year)" );
+        }
+
+        Copyright copyright = getCopyright( getCopyrightOwners() );
+        header.setCopyright( copyright );
+
+        String licenseContent = license.getHeaderContent( getEncoding() );
+        if ( license.isHeaderContentTemplateAware() )
+        {
+            licenseContent = processLicenseContext( licenseContent );
+        }
+        header.setLicense( licenseContent );
+
+        UpdateFileHeaderFilter filter = new UpdateFileHeaderFilter();
+        filter.setUpdateCopyright( canUpdateCopyright );
+        filter.setUpdateDescription( canUpdateDescription );
+        filter.setUpdateLicense( canUpdateLicense );
+
+        // update processor filter
+        return new FileHeaderProcessor( filter, header, transformer );
     }
 
     /**
      * Process the given file (will copy it, process the clone file and finally finalizeFile after process)...
      *
-     * @param file original file to process
+     * @param processor current file processor
+     * @param file      original file to process
      * @throws IOException if any IO error while processing this file
      */
-    protected void processFile( File file )
-        throws IOException
+    private void processFile( FileHeaderProcessor processor, File file ) throws IOException
     {
 
         if ( processedFiles.contains( file ) )
         {
-            getLog().info( " - skip already processed file " + file );
+            LOG.info( " - skip already processed file {}", file );
             return;
         }
 
@@ -837,20 +741,17 @@ public abstract class AbstractFileHeaderMojo
         boolean doFinalize = false;
         try
         {
-            doFinalize = processFile( file, processFile );
+            doFinalize = processFile( processor, file, processFile );
         }
         catch ( Exception e )
         {
-            getLog().warn( "skip failed file : " + e.getMessage() +
-                               ( e.getCause() == null ? "" : " Cause : " + e.getCause().getMessage() ), e );
+            LOG.warn( "skip failed file: " + e.getMessage()
+                                   + ( e.getCause() == null ? "" : " Cause : " + e.getCause().getMessage() ), e );
             FileState.fail.addFile( file, result );
             doFinalize = false;
         }
         finally
         {
-
-            // always clean processor internal states
-            processor.reset();
 
             // whatever was the result, this file is treated.
             processedFiles.add( file );
@@ -867,26 +768,38 @@ public abstract class AbstractFileHeaderMojo
     }
 
     /**
-     * Process the given {@code file} and save the result in the given
-     * {@code processFile}.
+     * Process the given {@code file} and save the result in the given {@code processFile}.
      *
+     * @param processor   current file processor
      * @param file        the file to process
-     * @param processFile the ouput processed file
+     * @param processFile the output processed file
      * @return {@code true} if prepareProcessFile can be finalize, otherwise need to be delete
      * @throws java.io.IOException if any pb while treatment
      */
-    protected boolean processFile( File file, File processFile )
-        throws IOException
+    private boolean processFile( FileHeaderProcessor processor, File file, File processFile ) throws IOException
     {
 
         if ( getLog().isDebugEnabled() )
         {
-            getLog().debug( " - process file " + file );
-            getLog().debug( " - will process into file " + processFile );
+            LOG.debug( " - process file {}", file );
+            LOG.debug( " - will process into file {}", processFile );
         }
 
         // update the file header description
-        updateFileHeaderDescription( file );
+        Map<String, Object> descriptionParameters = new HashMap<>();
+        descriptionParameters.put( "project", getProject() );
+        descriptionParameters.put( "addSvnKeyWords", addSvnKeyWords );
+        descriptionParameters.put( "projectName", projectName );
+        descriptionParameters.put( "inceptionYear", inceptionYear );
+        descriptionParameters.put( "organizationName", organizationName );
+        descriptionParameters.put( "file", file );
+
+        LOG.debug( "Description parameters: {}", descriptionParameters );
+
+        String description = freeMarkerHelper.renderTemplate( descriptionTemplate0, descriptionParameters );
+        processor.updateDescription( description );
+
+        LOG.debug( "header description : " + processor.getFileHeaderDescription() );
 
         String content;
 
@@ -908,7 +821,7 @@ public abstract class AbstractFileHeaderMojo
         //check that file is not marked to be ignored
         if ( content.contains( ignoreTag ) )
         {
-            getLog().info( " - ignore file (detected " + ignoreTag + ") " + file );
+            LOG.info( " - ignore file (detected {}) {}", ignoreTag, file );
 
             FileState.ignore.addFile( file, result );
 
@@ -919,13 +832,13 @@ public abstract class AbstractFileHeaderMojo
 
         try
         {
-            processor.process( file, processFile );
+            processor.process( content, processFile, getEncoding() );
         }
         catch ( IllegalStateException e )
         {
             // could not obtain existing header
             throw new InvalideFileHeaderException(
-                "Could not extract header on file " + file + " for reason " + e.getMessage() );
+                    "Could not extract header on file " + file + " for reason " + e.getMessage() );
         }
         catch ( Exception e )
         {
@@ -941,7 +854,7 @@ public abstract class AbstractFileHeaderMojo
 
             if ( isVerbose() )
             {
-                getLog().info( " - header was updated for " + file );
+                LOG.info( " - header was updated for {}", file );
             }
             if ( processor.isModified() )
             {
@@ -971,15 +884,15 @@ public abstract class AbstractFileHeaderMojo
         // no header at all, add a new header
         if ( isVerbose() )
         {
-            getLog().info( " - adding license header on file " + file );
+            LOG.info( " - adding license header on file {}", file );
         }
 
         //FIXME tchemit 20100409 xml files must add header after a xml prolog line
-        content = getTransformer().addHeader( filter.getFullHeaderContent(), content );
+        content = processor.addHeader( content );
 
         if ( !isDryRun() )
         {
-            FileUtil.writeString( processFile, content, getEncoding() );
+            FileUtil.printString( processFile, content, getEncoding() );
         }
 
         FileState.add.addFile( file, result );
@@ -988,15 +901,14 @@ public abstract class AbstractFileHeaderMojo
 
     /**
      * Finalize the process of a file.
-     * <p/>
+     * <p>
      * If ad DryRun then just remove processed file, else use process file as original file.
      *
      * @param file        the original file
      * @param processFile the processed file
      * @throws IOException if any IO error while finalizing file
      */
-    protected void finalizeFile( File file, File processFile )
-        throws IOException
+    private void finalizeFile( File file, File processFile ) throws IOException
     {
 
         if ( isKeepBackup() && !isDryRun() )
@@ -1010,12 +922,8 @@ public abstract class AbstractFileHeaderMojo
                 FileUtil.deleteFile( backupFile );
             }
 
-            if ( isVerbose() )
-            {
-                getLog().debug( " - backup original file " + file );
-            }
-
-            FileUtil.renameFile( file, backupFile );
+            LOG.debug( " - backup original file {}", file );
+            Files.copy( file.toPath(), backupFile.toPath(), StandardCopyOption.COPY_ATTRIBUTES );
         }
 
         if ( isDryRun() )
@@ -1028,339 +936,16 @@ public abstract class AbstractFileHeaderMojo
         {
             try
             {
-
                 // replace file with the updated one
-                FileUtil.renameFile( processFile, file );
+                String updatedContent = FileUtil.readAsString( processFile, getEncoding() );
+                FileUtil.printString( file, updatedContent, getEncoding() );
+                FileUtil.deleteFile( processFile );
             }
             catch ( IOException e )
             {
-                getLog().warn( e.getMessage() );
+                LOG.warn( "Error updating {} -> {}", processFile, file, e );
             }
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    protected void finalize()
-        throws Throwable
-    {
-        super.finalize();
-        clear();
-    }
-
-    /**
-     * Clear internal states of the mojo after execution. (will only invoked if {@link #clearAfterOperation} if on).
-     */
-    protected void clear()
-    {
-        if ( processedFiles != null )
-        {
-            processedFiles.clear();
-        }
-        if ( result != null )
-        {
-            for ( Set<File> fileSet : result.values() )
-            {
-                fileSet.clear();
-            }
-            result.clear();
-        }
-    }
-
-    /**
-     * Reports into the given {@code buffer} stats for the given {@code state}.
-     *
-     * @param state  state of file to report
-     * @param buffer where to report
-     */
-    protected void reportType( FileState state, StringBuilder buffer )
-    {
-        String operation = state.name();
-
-        Set<File> set = getFiles( state );
-        if ( set == null || set.isEmpty() )
-        {
-            if ( isVerbose() )
-            {
-                buffer.append( "\n * no header to " );
-                buffer.append( operation );
-                buffer.append( "." );
-            }
-            return;
-        }
-        buffer.append( "\n * " ).append( operation ).append( " header on " );
-        buffer.append( set.size() );
-        if ( set.size() == 1 )
-        {
-            buffer.append( " file." );
-        }
-        else
-        {
-            buffer.append( " files." );
-        }
-        if ( isVerbose() )
-        {
-            for ( File file : set )
-            {
-                buffer.append( "\n   - " ).append( file );
-            }
-        }
-    }
-
-    /**
-     * Build a default header given the parameters.
-     *
-     * @param license  the license type ot use in header
-     * @param encoding encoding used to read or write files
-     * @return the new file header
-     * @throws java.io.IOException if any problem while creating file header
-     */
-    protected FileHeader buildDefaultFileHeader( License license, String encoding )
-        throws IOException
-    {
-        FileHeader defaultFileHeader = new FileHeader();
-
-        if ( inceptionYear == null )
-        {
-            getLog().warn( "No inceptionYear defined (will use current year)" );
-        }
-
-        Copyright copyright = getCopyright( getCopyrightOwners() );
-        defaultFileHeader.setCopyright( copyright );
-
-//        Calendar cal = Calendar.getInstance();
-//        cal.setTime( new Date() );
-//        Integer lastYear = cal.get( Calendar.YEAR );
-//        Integer firstYear;
-//        if ( inceptionYear == null )
-//        {
-//            getLog().warn( "No inceptionYear defined (will use current year)" );
-//            firstYear = lastYear;
-//        }
-//        else
-//        {
-//            firstYear = Integer.valueOf( inceptionYear );
-//        }
-//        defaultFileHeader.setCopyrightFirstYear( firstYear );
-//        if ( firstYear < lastYear )
-//        {
-//            defaultFileHeader.setCopyrightLastYear( lastYear );
-//        }
-//        defaultFileHeader.setCopyrightHolder( organizationName );
-
-        String licenseContent = license.getHeaderContent( encoding );
-        if ( license.isHeaderContentTemplateAware() )
-        {
-            licenseContent = processLicenseContext( licenseContent );
-        }
-        defaultFileHeader.setLicense( licenseContent );
-        return defaultFileHeader;
-    }
-
-    /**
-     * Update in file header the description parts given the current file.
-     *
-     * @param file current file to treat
-     * @throws java.io.IOException if any problem while creating file header
-     */
-    protected void updateFileHeaderDescription( File file )
-        throws IOException
-    {
-
-        Map<String, Object> descriptionParameters = new HashMap<String, Object>();
-        descriptionParameters.put( "project", getProject() );
-        descriptionParameters.put( "addSvnKeyWords", addSvnKeyWords );
-        descriptionParameters.put( "projectName", projectName );
-        descriptionParameters.put( "inceptionYear", inceptionYear );
-        descriptionParameters.put( "organizationName", organizationName );
-        descriptionParameters.put( "file", file );
-
-        getLog().debug( "Description parameters:" + descriptionParameters );
-
-        String description = freeMarkerHelper.renderTemplate( descriptionTemplate0, descriptionParameters );
-        header.setDescription( description );
-        getLog().debug( "Computed description: " + description );
-        filter.resetContent();
-
-        if ( getLog().isDebugEnabled() )
-        {
-            getLog().debug( "header description : " + header.getDescription() );
-        }
-    }
-
-    /**
-     * Obtains the {@link FileHeaderTransformer} given his name.
-     *
-     * @param transformerName the name of the transformer to find
-     * @return the transformer for the givne tramsformer name
-     */
-    protected FileHeaderTransformer getTransformer( String transformerName )
-    {
-        if ( StringUtils.isEmpty( transformerName ) )
-        {
-            throw new IllegalArgumentException( "transformerName can not be null, nor empty!" );
-        }
-        if ( transformers == null )
-        {
-            throw new IllegalStateException( "No transformers initialized!" );
-        }
-        FileHeaderTransformer transformer = transformers.get( transformerName );
-        if ( transformer == null )
-        {
-            throw new IllegalArgumentException(
-                "transformerName " + transformerName + " is unknow, use one this one : " + transformers.keySet() );
-        }
-        return transformer;
-    }
-
-    /**
-     * Obtain for a given value, a trim version of it. If value is empty then use the given default value
-     *
-     * @param value        the value to trim (if not empty)
-     * @param defaultValue the default value to use if value is empty
-     * @return the trim value (or default value if value is empty)
-     */
-    protected String cleanHeaderConfiguration( String value, String defaultValue )
-    {
-        String resultHeader;
-        if ( StringUtils.isEmpty( value ) )
-        {
-
-            // use default value
-            resultHeader = defaultValue;
-        }
-        else
-        {
-
-            // clean all spaces of it
-            resultHeader = value.replaceAll( "\\s", "" );
-        }
-        return resultHeader;
-    }
-
-    /**
-     * Gets all files for the given {@code state}.
-     *
-     * @param state state of files to get
-     * @return all files of the given state
-     */
-    protected Set<File> getFiles( FileState state )
-    {
-        return result.get( state );
-    }
-
-    /**
-     * Collects some file.
-     *
-     * @param includes includes
-     * @param excludes excludes
-     * @param roots    root directories to treat
-     * @param files    cache of file detected indexed by their root directory
-     */
-    protected void getFilesToTreateForRoots( String[] includes, String[] excludes, List<String> roots,
-                                             Map<File, String[]> files )
-    {
-
-        DirectoryScanner ds = new DirectoryScanner();
-        ds.setIncludes( includes );
-        if ( excludes != null )
-        {
-            ds.setExcludes( excludes );
-        }
-        for ( String src : roots )
-        {
-
-            File f = new File( src );
-            if ( !f.exists() )
-            {
-                // do nothing on a non-existent
-                continue;
-            }
-
-            if ( getLog().isDebugEnabled() )
-            {
-                getLog().debug( "discovering source files in " + src );
-            }
-
-            ds.setBasedir( f );
-            // scan
-            ds.scan();
-
-            // get files
-            String[] tmp = ds.getIncludedFiles();
-
-            if ( tmp.length < 1 )
-            {
-                // no files found
-                continue;
-            }
-
-            List<String> toTreate = new ArrayList<String>();
-
-            Collections.addAll( toTreate, tmp );
-
-            if ( toTreate.isEmpty() )
-            {
-                // no file or all are up-to-date
-                continue;
-            }
-
-            // register files
-            files.put( f, toTreate.toArray( new String[toTreate.size()] ) );
-        }
-    }
-
-    /**
-     * Defines state of a file after process.
-     *
-     * @author tchemit <chemit@codelutin.com>
-     * @since 1.0
-     */
-    public static enum FileState
-    {
-
-        /**
-         * file was updated
-         */
-        update,
-
-        /**
-         * file was up to date
-         */
-        uptodate,
-
-        /**
-         * something was added on file
-         */
-        add,
-
-        /**
-         * file was ignored
-         */
-        ignore,
-
-        /**
-         * treatment failed for file
-         */
-        fail;
-
-        /**
-         * Register a file for this state on result dictionary.
-         *
-         * @param file    file to add
-         * @param results dictionary to update
-         */
-        public void addFile( File file, EnumMap<FileState, Set<File>> results )
-        {
-            Set<File> fileSet = results.get( this );
-            if ( fileSet == null )
-            {
-                fileSet = new HashSet<File>();
-                results.put( this, fileSet );
-            }
-            fileSet.add( file );
-        }
-    }
 }

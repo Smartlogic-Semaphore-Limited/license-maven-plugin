@@ -12,12 +12,26 @@
   <description>
     Check default execution.
   </description>
-  
+
+  <properties>
+    <project.build.sourceEncoding>utf-8</project.build.sourceEncoding>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
       <version>1.0</version>
+    </dependency>
+    <dependency>
+      <groupId>aopalliance</groupId>
+      <artifactId>aopalliance</artifactId>
+      <version>1.0</version>
+    </dependency>
+    <dependency>
+      <groupId>asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>3.1</version>
     </dependency>
   </dependencies>
 
@@ -29,9 +43,133 @@
         <version>@pom.version@</version>
         <executions>
           <execution>
+            <id>pre-1.18</id>
+            <phase>validate</phase>
             <goals>
               <goal>download-licenses</goal>
             </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-pre-1.18.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/pre-1.18/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/pre-1.18/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+            </configuration>
+          </execution>
+          <execution>
+            <id>since-1.18</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-since-1.18.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/since-1.18/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/since-1.18/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+              <licenseUrlFileNameSanitizers>
+                <licenseUrlFileNameSanitizer>
+                  <regexp>[\s-_]+</regexp>
+                  <replacement>-</replacement>
+                </licenseUrlFileNameSanitizer>
+              </licenseUrlFileNameSanitizers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>artifact-filters-url</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-artifact-filters-url.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/artifact-filters-url/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/artifact-filters-url/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+              <artifactFiltersUrl>${project.baseUri}artifact-filters.txt</artifactFiltersUrl>
+              <writeVersions>false</writeVersions>
+            </configuration>
+          </execution>
+          <execution>
+            <id>no-download</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-no-download.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/no-download/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/no-download/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+              <licenseUrlFileNameSanitizers>
+                <licenseUrlFileNameSanitizer>
+                  <regexp>[\s-_]+</regexp>
+                  <replacement>-</replacement>
+                </licenseUrlFileNameSanitizer>
+              </licenseUrlFileNameSanitizers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>delete-orphans</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-delete-orphans.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/delete-orphans/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/delete-orphans/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+              <licenseUrlFileNameSanitizers>
+                <licenseUrlFileNameSanitizer>
+                  <regexp>[\s-_]+</regexp>
+                  <replacement>-</replacement>
+                </licenseUrlFileNameSanitizer>
+              </licenseUrlFileNameSanitizers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>insert-versions</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>licenses-xml-insert-versions</goal>
+            </goals>
+            <configuration>
+              <licensesInputFile>${basedir}/src/license/licenses-input-insert-versions.xml</licensesInputFile>
+              <licensesOutputFile>${project.build.directory}/insert-versions/licenses.xml</licensesOutputFile>
+            </configuration>
+          </execution>
+          <execution>
+            <id>content-sanitizers</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <licensesConfigFile>${basedir}/src/license/licenses-config-content-sanitizers.xml</licensesConfigFile>
+              <licensesOutputDirectory>${project.build.directory}/content-sanitizers/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/content-sanitizers/licenses.xml</licensesOutputFile>
+              <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
+              <licenseUrlFileNameSanitizers>
+                <licenseUrlFileNameSanitizer>
+                  <regexp>[\s-_]+</regexp>
+                  <replacement>-</replacement>
+                </licenseUrlFileNameSanitizer>
+              </licenseUrlFileNameSanitizers>
+              <licenseContentSanitizers>
+                <licenseContentSanitizer>
+                  <id>apache-sanitizer</id>
+                  <urlRegexp>.*/apache-2\.0\.txt</urlRegexp>
+                  <contentRegexp>(^|\n) +</contentRegexp><!-- remove leading spaces -->
+                  <contentReplacement>$1</contentReplacement>
+                </licenseContentSanitizer>
+                <licenseContentSanitizer>
+                  <id>bsd-asm-sanitizer</id>
+                  <urlRegexp>.*/bsd3-asm\.txt</urlRegexp>
+                  <contentRegexp>[\r\n]+</contentRegexp>
+                  <contentReplacement>\n</contentReplacement><!-- Replace multiple EOLs with a single one -->
+                </licenseContentSanitizer>
+              </licenseContentSanitizers>
+            </configuration>
           </execution>
         </executions>
       </plugin>

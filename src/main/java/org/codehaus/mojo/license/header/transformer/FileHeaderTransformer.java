@@ -7,16 +7,16 @@ package org.codehaus.mojo.license.header.transformer;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -26,14 +26,14 @@ import org.codehaus.mojo.license.header.FileHeader;
 
 /**
  * Contract to transform a file header to {@link FileHeader} in both way :
- * <p/>
+ *
  * <ul>
  * <li>Obtain a object representation of a file header from a existing file
  * (String to FileHeader).</li>
  * <li>Obtain the file header to inject in a file from a FileHeader (to update
  * or create a file header from the file header model).
  * </ul>
- * <p/>
+ *
  * Moreover the contract offers two methods to box and unbox a String
  * representation of a header content :
  * <ul>
@@ -41,16 +41,11 @@ import org.codehaus.mojo.license.header.FileHeader;
  * <li>{@link #unboxComent(String)}</li>
  * </ul>
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public interface FileHeaderTransformer
 {
-
-    /**
-     * Plexus component role.
-     */
-    String ROLE_NAME = FileHeaderTransformer.class.getName();
 
     /**
      * default section delimiter.
@@ -68,9 +63,9 @@ public interface FileHeaderTransformer
     String DEFAULT_PROCESS_END_TAG = "#" + "L" + "%";
 
     /**
-     * File separator.
+     * Line separator.
      */
-    char LINE_SEPARATOR = '\n';
+    String LINE_SEPARATOR = System.getProperty( "line.separator" );
 
     /**
      * @return the name of the transformer
@@ -91,7 +86,7 @@ public interface FileHeaderTransformer
 
     /**
      * Obtains the process tag which indicates the begin of the header content.
-     * <p/>
+     *
      * By default, (says if you do not explicitly invoke the
      * {@link #setProcessStartTag(String)} method), will use the
      * {@link #DEFAULT_PROCESS_START_TAG}
@@ -102,7 +97,7 @@ public interface FileHeaderTransformer
 
     /**
      * Obtain the process tag which indiciates the end of the header content.
-     * <p/>
+     *
      * By default, (says if you do not explicitly invoke the
      * {@link #setProcessEndTag(String)} method), will use the
      * {@link #DEFAULT_PROCESS_END_TAG}.
@@ -113,7 +108,7 @@ public interface FileHeaderTransformer
 
     /**
      * The pattern used to separate sections of the header.
-     * <p/>
+     *
      * By default, (says if you do not explicitly invoke the
      * {@link #setSectionDelimiter(String)} method), will use the
      * {@link #DEFAULT_SECTION_DELIMITER}.
@@ -136,6 +131,22 @@ public interface FileHeaderTransformer
      * @return the line prefix of every line insed the comment
      */
     String getCommentLinePrefix();
+
+    String getLineSeparator();
+
+    /**
+     * Get flag if there should be an empty line after the header.
+     *
+     * @return if there should be an empty line after the header
+     */
+    boolean isEmptyLineAfterHeader();
+
+    /**
+     * Get flag if header line should be right trimmed when written.
+     *
+     * @return if header line should be right trimmed when written
+     */
+    boolean isTrimHeaderLine();
 
     /**
      * Adds the header.
@@ -251,7 +262,7 @@ public interface FileHeaderTransformer
 
     /**
      * Sets the header section delimiter.
-     * <p/>
+     *
      * By default, will use the {@link #DEFAULT_SECTION_DELIMITER}.
      *
      * @param headerSectionDelimiter the new delimiter
@@ -292,4 +303,20 @@ public interface FileHeaderTransformer
      * @param commentLinePrefix the new comment prefix line
      */
     void setCommentLinePrefix( String commentLinePrefix );
+
+    /**
+     * Set flag if there should be an empty line after the header.
+     *
+     * @param emptyLine flag if there should be an empty line after the header
+     */
+    void setEmptyLineAfterHeader( boolean emptyLine );
+
+    /**
+     * Set flag if header line should be right trimmed when written.
+     *
+     * @param trimLine flag if header line should be right trimmed when written
+     */
+    void setTrimHeaderLine( boolean trimLine );
+
+    void setLineSeparator( String lineSeparator );
 }

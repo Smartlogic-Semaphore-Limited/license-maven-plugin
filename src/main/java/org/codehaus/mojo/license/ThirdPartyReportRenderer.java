@@ -34,7 +34,7 @@ import java.util.Locale;
 /**
  * Generates a report of third parties of the project.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.1
  */
 public class ThirdPartyReportRenderer
@@ -51,7 +51,7 @@ public class ThirdPartyReportRenderer
 
     protected Collection<ThirdPartyDetails> getThirdPartiesPomLicense()
     {
-        Collection<ThirdPartyDetails> result = new ArrayList<ThirdPartyDetails>();
+        Collection<ThirdPartyDetails> result = new ArrayList<>();
         for ( ThirdPartyDetails detail : details )
         {
             if ( detail.hasPomLicenses() )
@@ -64,7 +64,7 @@ public class ThirdPartyReportRenderer
 
     protected Collection<ThirdPartyDetails> getThirdPartiesThirdPartyLicense()
     {
-        Collection<ThirdPartyDetails> result = new ArrayList<ThirdPartyDetails>();
+        Collection<ThirdPartyDetails> result = new ArrayList<>();
         for ( ThirdPartyDetails detail : details )
         {
             if ( detail.hasThirdPartyLicenses() )
@@ -77,7 +77,7 @@ public class ThirdPartyReportRenderer
 
     protected Collection<ThirdPartyDetails> getThirdPartiesNoLicense()
     {
-        Collection<ThirdPartyDetails> result = new ArrayList<ThirdPartyDetails>();
+        Collection<ThirdPartyDetails> result = new ArrayList<>();
         for ( ThirdPartyDetails detail : details )
         {
             if ( !detail.hasLicenses() )
@@ -261,7 +261,7 @@ public class ThirdPartyReportRenderer
         sink.sectionTitle2_();
         renderThirdPartyDetailTable( detail );
 
-        sink.link( "./third-party-report.html#" + getText( "report.overview.title" ) );
+        sink.link( "#" + getText( "report.overview.title" ) );
         sink.text( getText( "report.back.to.top.page" ) );
         sink.link_();
         sink.lineBreak();

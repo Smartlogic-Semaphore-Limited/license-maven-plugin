@@ -7,25 +7,25 @@ package org.codehaus.mojo.license.model;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
  */
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.codehaus.mojo.license.utils.MojoHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
@@ -40,17 +40,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public class LicenseRepository
     implements Iterable<License>
 {
-
-    /**
-     * Logger.
-     */
-    private static final Log LOG = LogFactory.getLog( LicenseRepository.class );
+    private static final Logger LOG = LoggerFactory.getLogger( LicenseRepository.class );
 
     public static final String REPOSITORY_DEFINITION_FILE = "licenses.properties";
 
@@ -84,25 +80,38 @@ public class LicenseRepository
         this.baseURL = baseURL;
     }
 
+    protected URL getDefinitionURL()
+    {
+        if ( baseURL == null || StringUtils.isEmpty( baseURL.toString() ) )
+        {
+            throw new IllegalStateException( "no baseURL defined in " + this );
+        }
+
+        URL definitionURL = MojoHelper.getUrl( getBaseURL(), REPOSITORY_DEFINITION_FILE );
+        return definitionURL;
+    }
+
+    protected URL getLicenseBaseURL( String licenseName )
+    {
+        URL licenseBaseURL = MojoHelper.getUrl( baseURL, licenseName );
+        return licenseBaseURL;
+    }
+
     public void load()
         throws IOException
     {
         checkNotInit( "load" );
         try
         {
-            if ( baseURL == null || StringUtils.isEmpty( baseURL.toString() ) )
-            {
-                throw new IllegalStateException( "no baseURL defined in " + this );
-            }
 
-            URL definitionURL = MojoHelper.getUrl( getBaseURL(), REPOSITORY_DEFINITION_FILE );
+            URL definitionURL = getDefinitionURL();
             if ( licenses != null )
             {
                 licenses.clear();
             }
             else
             {
-                licenses = new ArrayList<License>();
+                licenses = new ArrayList<>();
             }
 
             if ( !checkExists( definitionURL ) )
@@ -117,7 +126,7 @@ public class LicenseRepository
             {
                 String licenseName = (String) entry.getKey();
                 licenseName = licenseName.trim().toLowerCase();
-                URL licenseBaseURL = MojoHelper.getUrl( baseURL, licenseName );
+                URL licenseBaseURL = getLicenseBaseURL( licenseName );
 
                 License license = new License();
                 license.setName( licenseName );
@@ -147,14 +156,8 @@ public class LicenseRepository
 
                 license.setDescription( licenseDescription );
 
-                if ( LOG.isInfoEnabled() )
-                {
-                    LOG.info( "register " + license.getDescription() );
-                }
-                if ( LOG.isDebugEnabled() )
-                {
-                    LOG.debug( license );
-                }
+                LOG.info( "register {}", license.getDescription() );
+                LOG.debug( "{}", license );
                 licenses.add( license );
             }
             licenses = Collections.unmodifiableList( licenses );
@@ -169,7 +172,7 @@ public class LicenseRepository
     public String[] getLicenseNames()
     {
         checkInit( "getLicenseNames" );
-        List<String> result = new ArrayList<String>( licenses.size() );
+        List<String> result = new ArrayList<>( licenses.size() );
         for ( License license : this )
         {
             result.add( license.getName() );
@@ -256,9 +259,8 @@ public class LicenseRepository
             else
             {
                 throw new IllegalArgumentException(
-                    "Could not find license (" + license + ") content file at [" + result + "], nor at [" +
-                        resultWithFtlSuffix + "] for resolver " +
-                        this );
+                    "Could not find license (" + license + ") content file at [" + result + "], nor at ["
+                        + resultWithFtlSuffix + "] for resolver " + this );
             }
         }
         return result;

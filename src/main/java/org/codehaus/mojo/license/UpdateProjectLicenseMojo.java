@@ -7,16 +7,16 @@ package org.codehaus.mojo.license;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -27,24 +27,27 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.codehaus.mojo.license.model.License;
 import org.codehaus.mojo.license.utils.FileUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
 /**
  * Updates (or creates) the main project license file according to the given
  * license defines as {@link #licenseName}.
- * <p/>
+ *
  * Can also generate a bundled license file (to avoid collision names in
  * class-path). This file is by default generated in
  * {@code META-INF class-path directory}.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
-@Mojo( name = "update-project-license", requiresProject = true, defaultPhase = LifecyclePhase.GENERATE_RESOURCES )
+@Mojo( name = "update-project-license", defaultPhase = LifecyclePhase.GENERATE_RESOURCES )
 public class UpdateProjectLicenseMojo
     extends AbstractLicenseNameMojo
 {
+    private static final Logger LOG = LoggerFactory.getLogger( UpdateProjectLicenseMojo.class );
 
     // ----------------------------------------------------------------------
     // Mojo Parameters
@@ -62,7 +65,7 @@ public class UpdateProjectLicenseMojo
 
     /**
      * The directory where to generate license resources.
-     * <p/>
+     *
      * <b>Note:</b> This option is not available for {@code pom} module types.
      *
      * @since 1.0
@@ -72,13 +75,13 @@ public class UpdateProjectLicenseMojo
 
     /**
      * A flag to copy the main license file in a bundled place.
-     * <p/>
+     *
      * This is usefull for final application to have a none confusing location
      * to seek for the application license.
-     * <p/>
+     *
      * If Sets to {@code true}, will copy the license file to the
      * {@link #bundleLicensePath} to {@link #outputDirectory}.
-     * <p/>
+     *
      * <b>Note:</b> This option is not available for {@code pom} module types.
      *
      * @since 1.0
@@ -89,7 +92,7 @@ public class UpdateProjectLicenseMojo
     /**
      * The path of the bundled license file to produce when
      * {@link #generateBundle} is on.
-     * <p/>
+     *
      * <b>Note:</b> This option is not available for {@code pom} module types.
      *
      * @since 1.0
@@ -166,17 +169,17 @@ public class UpdateProjectLicenseMojo
         if ( doGenerate )
         {
 
-            getLog().info( "Will create or update license file [" + license.getName() + "] to " + licenseFile );
+            LOG.info( "Will create or update license file [{}] to {}", license.getName(), licenseFile );
             if ( isVerbose() )
             {
-                getLog().info( "detail of license :\n" + license );
+                LOG.info( "detail of license :\n{}", license );
             }
 
             if ( licenseFile.exists() && isKeepBackup() )
             {
                 if ( isVerbose() )
                 {
-                    getLog().info( "backup " + licenseFile );
+                    LOG.info( "backup {}", licenseFile );
                 }
                 // copy it to backup file
                 FileUtil.backupFile( licenseFile );
@@ -186,7 +189,8 @@ public class UpdateProjectLicenseMojo
         // obtain license content
         String licenseContent = license.getLicenseContent( getEncoding() );
 
-        if (license.isLicenseContentTemplateAware()) {
+        if ( license.isLicenseContentTemplateAware() )
+        {
 
             licenseContent = processLicenseContext( licenseContent );
         }
@@ -194,7 +198,7 @@ public class UpdateProjectLicenseMojo
         {
 
             // writes it root main license file
-            FileUtil.writeString( licenseFile, licenseContent, getEncoding() );
+            FileUtil.printString( licenseFile, licenseContent, getEncoding() );
         }
 
         if ( hasClassPath() )

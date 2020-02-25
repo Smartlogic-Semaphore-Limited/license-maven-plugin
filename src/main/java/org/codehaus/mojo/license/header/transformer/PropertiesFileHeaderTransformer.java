@@ -7,16 +7,16 @@ package org.codehaus.mojo.license.header.transformer;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -27,7 +27,7 @@ import org.codehaus.plexus.component.annotations.Component;
 /**
  * Implementation of {@link FileHeaderTransformer} for properties format.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 @Component( role = FileHeaderTransformer.class, hint = "properties" )
@@ -36,17 +36,11 @@ public class PropertiesFileHeaderTransformer
 {
 
     /**
-     * Line separator caracter.
-     */
-    protected final String linesep;
-
-    /**
      * Default constructor.
      */
     public PropertiesFileHeaderTransformer()
     {
         super( "properties", "header transformer with properties file comment style", "###", "###", "# " );
-        linesep = System.getProperty( "line.separator" );
     }
 
     /**
@@ -73,13 +67,13 @@ public class PropertiesFileHeaderTransformer
 
             // shebang was detected
 
-            int endProlog = content.indexOf( linesep );
+            int endProlog = content.indexOf( '\n', startProlog );
 
             if ( endProlog > -1 )
             {
 
                 // prolog end was detected
-                prolog = content.substring( 0, endProlog + linesep.length() );
+                prolog = content.substring( 0, endProlog + 1 );
             }
         }
 
@@ -94,7 +88,7 @@ public class PropertiesFileHeaderTransformer
 
             // shebang detected
             content = content.substring( prolog.length() );
-            result = super.addHeader( prolog + '\n' + header, content );
+            result = super.addHeader( prolog + getLineSeparator() + header, content );
         }
         return result;
     }

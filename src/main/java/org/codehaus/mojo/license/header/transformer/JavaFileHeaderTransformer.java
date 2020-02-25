@@ -7,16 +7,16 @@ package org.codehaus.mojo.license.header.transformer;
  * Copyright (C) 2008 - 2011 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
@@ -27,7 +27,7 @@ import org.codehaus.plexus.component.annotations.Component;
 /**
  * Implementation of {@link FileHeaderTransformer} for java format.
  *
- * @author tchemit <chemit@codelutin.com>
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 @Component( role = FileHeaderTransformer.class, hint = "java" )
@@ -43,6 +43,15 @@ public class JavaFileHeaderTransformer
     protected boolean addJavaLicenseAfterPackage;
 
     /**
+     * Flag to use comment start tag with a no reformat syntax {@code /*-}.
+     *
+     * See http://www.oracle.com/technetwork/java/javase/documentation/codeconventions-141999.html#350
+     *
+     * @since 1.9
+     */
+    protected boolean useNoReformatCommentStartTag;
+
+    /**
      * Default constructor.
      */
     public JavaFileHeaderTransformer()
@@ -55,8 +64,8 @@ public class JavaFileHeaderTransformer
      */
     public String[] getDefaultAcceptedExtensions()
     {
-        return new String[]{ "java", "groovy", "css", "cs", "as", "aj", "c", "h", "cpp", "js", "json"
-
+        return new String[]{ "java", "groovy", "css", "jccs", "cs", "as", "aj", "c", "h", "cpp", "js", "json", "ts",
+                "go", "kt"
         };
     }
 
@@ -69,6 +78,23 @@ public class JavaFileHeaderTransformer
     public void setAddJavaLicenseAfterPackage( boolean addJavaLicenseAfterPackage )
     {
         this.addJavaLicenseAfterPackage = addJavaLicenseAfterPackage;
+    }
+
+    /**
+     * Sets the value of the property {@link #useNoReformatCommentStartTag}.
+     *
+     * @param useNoReformatCommentStartTag the new value to set
+     * @since 1.9
+     */
+    public void setUseNoReformatCommentStartTag( boolean useNoReformatCommentStartTag )
+    {
+        this.useNoReformatCommentStartTag = useNoReformatCommentStartTag;
+    }
+
+    @Override
+    public String getCommentStartTag()
+    {
+        return useNoReformatCommentStartTag ? "/*-" : super.getCommentStartTag();
     }
 
     /**
@@ -100,17 +126,21 @@ public class JavaFileHeaderTransformer
 
                 int lastIndex = endProlog + 1;
 
-                prolog = content.substring( 0, lastIndex );
+                // Include existing end of line in prolog
 
-                // prolog goes to next line
-                prolog += "\n";
-
-                if ( lastIndex == content.length() )
+                if ( lastIndex < content.length() && content.charAt( lastIndex ) == '\r' )
                 {
-
-                    // adding a new empty end line to the content
-                    content += "\n";
+                  lastIndex++;
                 }
+
+                if ( lastIndex < content.length() && content.charAt( lastIndex ) == '\n' )
+                {
+                  lastIndex++;
+                }
+
+                // the prolog includes the whole package definition
+
+                prolog = content.substring( 0, lastIndex );
 
 
             }
@@ -127,7 +157,7 @@ public class JavaFileHeaderTransformer
 
             // prolog detected
             content = content.substring( prolog.length() );
-            result = super.addHeader( prolog + "\n" + header, content );
+            result = super.addHeader( prolog + getLineSeparator() + header, content );
         }
         return result;
     }

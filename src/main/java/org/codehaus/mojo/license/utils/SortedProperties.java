@@ -2,25 +2,26 @@ package org.codehaus.mojo.license.utils;
 
 /*
  * #%L
- * Maven helper plugin
+ * License Maven Plugin
  * %%
- * Copyright (C) 2009 - 2010 Tony Chemit, CodeLutin
+ * Copyright (C) 2009 - 2010 CodeLutin, Codehaus, Tony Chemit
  * %%
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as 
- * published by the Free Software Foundation, either version 3 of the 
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
  * License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Lesser Public License for more details.
- * 
- * You should have received a copy of the GNU General Lesser Public 
+ *
+ * You should have received a copy of the GNU General Lesser Public
  * License along with this program.  If not, see
  * <http://www.gnu.org/licenses/lgpl-3.0.html>.
  * #L%
  */
+
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,8 +37,8 @@ import java.util.Vector;
 /**
  * Permet d'avoir les fichiers de proprietes tries.
  *
- * @author ruchaud <ruchaud@codelutin.com>
- * @author tchemit <chemit@codelutin.com>
+ * @author ruchaud ruchaud@codelutin.com
+ * @author tchemit dev@tchemit.fr
  * @since 1.0
  */
 public class SortedProperties
@@ -93,7 +94,7 @@ public class SortedProperties
         {
             // keys are not string !!!
             // can not sort keys
-            result = new Vector<Object>( objects );
+            result = new Vector<>( objects );
         }
         return result.elements();
     }
@@ -142,11 +143,11 @@ public class SortedProperties
 
     /**
      * Permet de convertir une liste non typee, en une liste typee.
-     * <p/>
+     *
      * La liste en entree en juste bien castee.
-     * <p/>
+     *
      * On effectue une verification sur le typage des elements de la liste.
-     * <p/>
+     *
      * Note : <b>Aucune liste n'est creee, ni recopiee</b>
      *
      * @param <O>  le type des objets de la liste
